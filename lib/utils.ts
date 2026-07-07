@@ -155,6 +155,21 @@ export function getTaskStatusColor(status: string): string {
   }
 }
 
+export function getExecutionStatusColor(status: string): string {
+  switch (status) {
+    case 'queued': return 'text-gray-400 bg-gray-400/10 border-gray-400/20'
+    case 'running': return 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20'
+    case 'completed': return 'text-green-400 bg-green-400/10 border-green-400/20'
+    case 'failed': return 'text-red-400 bg-red-400/10 border-red-400/20'
+    case 'cancelled': return 'text-gray-400 bg-gray-400/10 border-gray-400/20'
+    default: return 'text-gray-400 bg-gray-400/10 border-gray-400/20'
+  }
+}
+
+export function getDecisionOutcomeColor(outcome: string): string {
+  return outcome === 'yes' ? 'text-green-400 bg-green-400/10 border-green-400/20' : 'text-red-400 bg-red-400/10 border-red-400/20'
+}
+
 export function formatDuration(seconds: number | null | undefined): string {
   if (seconds == null) return '—'
   if (seconds < 60) return `${seconds}s`

@@ -1,12 +1,14 @@
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { Task, TaskHistoryEvent, TaskReview } from '@/lib/types'
+import { AgentCapability, AgentExecution, Delegation, Task, TaskHistoryEvent, TaskReview } from '@/lib/types'
 import { getAssignmentPriorityColor, getTaskStatusColor, getInitials, getTrustScoreColor, formatTimeAgo, formatDuration } from '@/lib/utils'
 import TaskActions from '@/components/tasks/TaskActions'
 import TaskReviewForm from '@/components/tasks/TaskReviewForm'
 import TaskHistoryTimeline from '@/components/tasks/TaskHistoryTimeline'
 import AssignAgentControl from '@/components/tasks/AssignAgentControl'
+import ExecutionPanel from '@/components/tasks/ExecutionPanel'
+import DelegationPanel from '@/components/tasks/DelegationPanel'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,10 +26,11 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
 
   if (!task) notFound()
 
-  const [{ data: isSupervisor }, { data: history }, { data: assignableAgents }] = await Promise.all([
+  const [{ data: isSupervisor }, { data: history }, { data: assignableAgents }, { data: myAgentIds }] = await Promise.all([
     supabase.rpc('is_org_supervisor', { p_org_id: task.organization_id, p_user_id: user.id }),
     supabase.from('task_history').select('*').eq('task_id', id).order('created_at', { ascending: true }),
     supabase.from('agent_assignments').select('agents(id, name)').eq('organization_id', task.organization_id).eq('status', 'active'),
+    supabase.from('agents').select('id').eq('owner_id', user.id),
   ])
 
   const isAssignedAgentOwner = task.agents?.owner_id === user.id
@@ -40,6 +43,28 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
       .map((r) => [r.agents!.id, r.agents!])
     ).values()
   )
+
+  const myOwnedAgentIds = (myAgentIds || []).map((a) => a.id)
+
+  // Delegations are always fetched (RLS scopes visibility to the from/to
+  // agent owners and org members) since the delegation *target's* owner
+  // needs to see and respond to it even though they don't yet own the task's
+  // assigned agent.
+  const [{ data: delegations }, capabilitiesResult, executionsResult] = await Promise.all([
+    supabase
+      .from('delegations')
+      .select('*, from_agent:agents!delegations_from_agent_id_fkey(id, name), to_agent:agents!delegations_to_agent_id_fkey(id, name)')
+      .eq('task_id', id)
+      .order('created_at', { ascending: false }),
+    task.agents && isAssignedAgentOwner
+      ? supabase.from('agent_capabilities').select('*').eq('agent_id', task.agents.id).order('created_at', { ascending: false })
+      : Promise.resolve({ data: null }),
+    task.agents && isAssignedAgentOwner
+      ? supabase.from('agent_executions').select('*, agent_capabilities(id, name)').eq('task_id', id).order('created_at', { ascending: false }).limit(10)
+      : Promise.resolve({ data: null }),
+  ])
+  const capabilities = capabilitiesResult.data
+  const executions = executionsResult.data
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -113,6 +138,27 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
       )}
 
       <TaskActions task={task as Task} canExecute={canExecute} />
+
+      {task.agents && isAssignedAgentOwner && task.status !== 'completed' && task.status !== 'failed' && (
+        <ExecutionPanel
+          taskId={task.id}
+          agentId={task.agents.id}
+          taskTitle={task.title}
+          taskDescription={task.description}
+          capabilities={(capabilities as AgentCapability[]) || []}
+          executions={(executions as AgentExecution[]) || []}
+        />
+      )}
+
+      {task.agents && (isAssignedAgentOwner || isSupervisor) && task.status !== 'completed' && task.status !== 'failed' && (
+        <DelegationPanel
+          taskId={task.id}
+          fromAgentId={task.agents.id}
+          delegationTargets={agentOptions}
+          delegations={(delegations as Delegation[]) || []}
+          currentUserOwnedAgentIds={myOwnedAgentIds}
+        />
+      )}
 
       {task.status === 'review' && isSupervisor && !review && (
         <TaskReviewForm taskId={task.id} reviewerId={user.id} />

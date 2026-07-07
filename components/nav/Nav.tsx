@@ -51,6 +51,18 @@ export default function Nav({ profile }: { profile: Profile }) {
           >
             Tasks
           </Link>
+          <Link
+            href="/executions"
+            className={`text-sm font-medium ${pathname.startsWith('/executions') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
+          >
+            Executions
+          </Link>
+          <Link
+            href="/messages"
+            className={`text-sm font-medium ${pathname.startsWith('/messages') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
+          >
+            Messages
+          </Link>
           {profile.is_admin && (
             <Link
               href="/admin/verifications"

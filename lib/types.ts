@@ -414,3 +414,124 @@ export type TaskHistoryEvent = {
   created_at: string
   profiles?: Profile
 }
+
+// ============================================================
+// Agent Runtime Layer (Phase 5)
+// ============================================================
+
+export type AgentCapability = {
+  id: string
+  agent_id: string
+  name: string
+  description: string | null
+  input_schema: Record<string, unknown>
+  output_schema: Record<string, unknown>
+  cost_estimate: number
+  enabled: boolean
+  created_at: string
+  updated_at: string
+}
+
+export const CAPABILITY_EXAMPLES = [
+  'Research', 'Writing', 'Summarization', 'Lead Generation',
+  'Data Analysis', 'Customer Support', 'Coding', 'Planning',
+]
+
+export type ExecutionStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
+export type ModelProviderName = 'openai' | 'anthropic' | 'local'
+
+export type AgentExecution = {
+  id: string
+  agent_id: string
+  task_id: string | null
+  capability_id: string | null
+  status: ExecutionStatus
+  provider: ModelProviderName | null
+  model: string | null
+  input: Record<string, unknown>
+  output: Record<string, unknown> | null
+  error: string | null
+  started_at: string | null
+  completed_at: string | null
+  execution_time_ms: number | null
+  tokens_used: number | null
+  cost: number | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  agents?: Pick<Agent, 'id' | 'name' | 'avatar_url' | 'owner_id'>
+  tasks?: Pick<Task, 'id' | 'title'>
+  agent_capabilities?: Pick<AgentCapability, 'id' | 'name'>
+}
+
+export type DecisionType = 'accept_task' | 'complete_task' | 'request_assistance' | 'delegate'
+
+export type AgentDecision = {
+  id: string
+  agent_id: string
+  task_id: string | null
+  execution_id: string | null
+  decision_type: DecisionType
+  outcome: 'yes' | 'no'
+  reasoning: string
+  metadata: Record<string, unknown>
+  created_at: string
+}
+
+export type AgentErrorLog = {
+  id: string
+  agent_id: string
+  execution_id: string | null
+  task_id: string | null
+  error_type: string
+  message: string
+  context: Record<string, unknown>
+  created_at: string
+}
+
+export type MemoryType = 'fact' | 'preference' | 'learned_pattern' | 'context'
+
+export type AgentMemory = {
+  id: string
+  agent_id: string
+  organization_id: string | null
+  memory_type: MemoryType
+  key: string
+  value: Record<string, unknown>
+  importance: number
+  created_at: string
+  updated_at: string
+}
+
+export type MessageReceiverType = 'agent' | 'organization' | 'manager'
+export type AgentMessageType = 'update' | 'question' | 'alert' | 'handoff' | 'report'
+
+export type AgentMessage = {
+  id: string
+  sender_agent_id: string
+  receiver_type: MessageReceiverType
+  receiver_id: string
+  message_type: AgentMessageType
+  content: string
+  metadata: Record<string, unknown>
+  read_at: string | null
+  created_at: string
+  agents?: Pick<Agent, 'id' | 'name' | 'avatar_url'>
+}
+
+export type DelegationStatus = 'pending' | 'accepted' | 'rejected' | 'completed' | 'failed'
+
+export type Delegation = {
+  id: string
+  task_id: string
+  from_agent_id: string
+  to_agent_id: string
+  reason: string | null
+  status: DelegationStatus
+  outcome: string | null
+  created_at: string
+  updated_at: string
+  from_agent?: Pick<Agent, 'id' | 'name' | 'avatar_url'>
+  to_agent?: Pick<Agent, 'id' | 'name' | 'avatar_url'>
+  tasks?: Pick<Task, 'id' | 'title'>
+}

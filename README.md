@@ -1,4 +1,4 @@
-# AI Workforce — Work Execution Layer (v4)
+# AI Workforce — Agent Runtime Layer (v5)
 
 Give every AI worker a verifiable, discoverable identity. Built with **Next.js 16 (App Router)**, **TypeScript**, **Tailwind CSS**, and **Supabase** (Auth, Postgres).
 
@@ -53,6 +53,21 @@ An internal workforce operating system — organizations create, assign, execute
 - 🌐 **API** — `GET/POST /api/tasks` for programmatic queue access and task creation, laying groundwork for external clients without building them yet.
 - 🔮 **Future compatibility, not yet built**: external clients, hiring/marketplace (Phase 2's `jobs`/`applications` placeholders are still schema-only), agent-to-agent delegation (`created_by` stays human-only for now — a `delegated_by_agent_id` column can be added later without touching this phase's shape).
 
+## Phase 5 — Agent Runtime Layer
+
+Agents become active workers instead of static records. No marketplace, no payments beyond the existing internal wallet ledger, no public hiring.
+
+- 🛠️ **Capabilities** (`agent_capabilities`) — one row per agent per capability (Research, Writing, Summarization, Lead Generation, Data Analysis, Customer Support, Coding, Planning, or custom), each with its own `input_schema`/`output_schema`, `cost_estimate`, and `enabled` flag. Managed from the agent's edit page.
+- ⚙️ **Executions** (`agent_executions`) — agent, task, capability, status (queued → running → completed/failed/cancelled), input/output, `tokens_used`, and `execution_time_ms` (a generated column, same trigger-owned-timestamp pattern as Phase 4's tasks). Runs inline within the request — this stack has no background worker, so "queued" is real but brief.
+- 🧠 **Model provider abstraction** (`lib/providers`) — a common `ModelProvider` interface with real implementations for OpenAI (Chat Completions), Anthropic (Messages API), and a local/Ollama-compatible HTTP provider. Agents pick a provider per execution; none are hardcoded. Requires the relevant API key/URL to be configured (see `.env.example`) — without one, that provider fails with a clear `ProviderConfigError` rather than fabricating output.
+- ⚖️ **Decision engine** — four rules-based, fully-audited decision functions: `decide_agent_accept_task` (capacity, capability, wallet balance), `decide_agent_complete_task` (did the execution actually produce output), `decide_request_assistance` (low trust score or a recent failure streak), `decide_delegate_task` (agent inactive, at capacity, or trust too low). Every call — accepted or not — writes a row to `agent_decisions`; a task an agent declines still gets a `failed` execution row explaining why, so rejections are as auditable as successes.
+- 📚 **Memory** (`agent_memory`) — facts, preferences, learned patterns, and org context, keyed `(agent_id, memory_type, key)` so writes upsert instead of accumulating duplicates. `search_agent_memory()` does keyword retrieval (full-text search) ranked by relevance × importance × recency. Private to the agent's owner.
+- 📡 **Communication** (`agent_messages`) — agent → agent, agent → organization, agent → manager, with a `receiver_type`/`receiver_id` pair mirroring the `follows` polymorphism from Phase 2. Surfaced at `/messages` for the humans on the receiving end.
+- 🔀 **Delegation** (`delegations`) — agent A proposes handing a task to agent B, with a reason; B's owner accepts or rejects. Acceptance reassigns the task, cascading through Phase 4's existing tasks triggers (history, workflow advance) rather than duplicating that logic.
+- 📈 **Execution dashboard** (`/executions`) — My Agents / Organization views; active executions, failed executions, success rate, average runtime, and agent utilization (share of in-scope agents currently running something).
+- 🔍 **Observability** — `agent_executions` is the execution log, `agent_error_logs` is a dedicated error log (auto-populated whenever an execution fails), and `agent_decisions` is the decision log — together with Phases 2-4's activity/history tables, every runtime action is auditable somewhere.
+- 🔒 **Security hardening** — closed a gap that applied retroactively to Phases 2-4: several `security definer` helper functions (`apply_task_completion_metrics`, `create_task_for_workflow_step`, `advance_workflow_run_core`, the various `log_*`/`recompute_*` functions, and this phase's `apply_execution_cost`) had no internal ownership check and were directly callable by any authenticated user via `supabase.rpc()`, since Postgres grants `EXECUTE` to `PUBLIC` by default. Migration 007 revokes that grant from `public`/`anon`/`authenticated` on every such function; they keep working from inside other security-definer triggers (which run as their owner regardless of grants) but are no longer directly reachable.
+
 ## Getting started
 
 ### 1. Install dependencies
@@ -71,6 +86,7 @@ npm install
    - `supabase/migrations/004_hiring_placeholders.sql` — schema-only tables for future hiring features
    - `supabase/migrations/005_organizations.sql` — organization expansion, member/role hierarchy, departments, agent assignments, metrics, activity graph, and the workflow engine
    - `supabase/migrations/006_tasks.sql` — tasks, task history, task reviews, and the workflow↔task integration
+   - `supabase/migrations/007_agent_runtime.sql` — capabilities, executions, decision engine, memory, communication, delegation, and a security-hardening pass on earlier phases' internal functions
 
 ### 3. Configure environment
 
@@ -83,6 +99,8 @@ NEXT_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
+
+To actually run agent executions (Phase 5), also set at least one of `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `LOCAL_MODEL_URL`/`LOCAL_MODEL_NAME` — see `.env.example`. Everything else works without any of these configured; only `POST /api/executions` needs a provider.
 
 ### 4. Run
 
@@ -106,6 +124,10 @@ Open [http://localhost:3000](http://localhost:3000), sign up, then register your
 - **Two independent completion paths, one shared core.** A task reaches `completed` either directly (an executor sets the status) or via a review submitted while `status = 'review'` (which flips it to `completed`). Both paths funnel through the same `tasks_after_update_metrics` / `tasks_after_update_history` / `tasks_after_update_advance_workflow` triggers, so there's exactly one place performance metrics, history, and workflow advancement are wired up.
 - **Workflow-triggered task creation reuses task RLS, not a bypass.** `create_task_for_workflow_step()` is `security definer` (system-driven, no acting user to check), but the resulting rows are ordinary tasks — visible and actionable under the same policies as any manually-created task.
 - **No marketplace, public job posting, payments, or agent-to-agent delegation were added in Phase 4**, per scope. `tasks.created_by` is human-only for now; delegation later just needs an additional nullable column, not a redesign.
+- **The runtime has no background worker.** `POST /api/executions` runs the whole decision → provider call → completion pipeline inline within the request. That's honest for this stack (Next.js on Supabase, no queue infrastructure) and fine for interactive use; a real job queue would be the next step before running executions unattended at volume.
+- **Decision engine is rules-based, not LLM-based.** `decide_agent_accept_task` / `decide_agent_complete_task` / `decide_request_assistance` / `decide_delegate_task` are deterministic SQL functions (capacity, capability match, wallet balance, trust score, recent failure rate) rather than a model call asked to "decide." That keeps every decision explainable and free, and it's a legitimate policy layer — an LLM-based version could sit in front of it later without changing the audit trail shape.
+- **Execution cost is a flat per-capability estimate, debited on completion** via `agent_wallet_transaction` (Phase 1's owner-authorized RPC — the runtime always executes as the agent's owner, since that's who Phase 1's `agent_executions` RLS requires to trigger a run). It is not derived from actual token usage; wiring in provider-specific per-token pricing is a natural follow-up.
+- **No marketplace, payments beyond the existing wallet, or public hiring were added in Phase 5**, per scope.
 
 ## Project structure
 
@@ -115,6 +137,7 @@ app/
   auth/callback                 – OAuth/email confirmation code exchange
   api/agents/search              – GET search/filter/sort/paginate endpoint
   api/tasks                     – GET (list, filtered) / POST (create) task API
+  api/executions                – GET (list, filtered) / POST (run) execution API
   (app)/                        – authenticated shell
     agents                      – global directory: search, filters, sort, pagination
     agents/new                  – agent registration
@@ -130,16 +153,26 @@ app/
     tasks                       – work queue: My Tasks / Organization Tasks / Department Tasks,
                                    filtered by status/priority/agent/department
     tasks/new                   – task creation
-    tasks/[id]                  – task detail: execution, output, review, history
+    tasks/[id]                  – task detail: execution, output, review, history,
+                                   runtime execution trigger, delegation
+    executions                  – dashboard: My Agents / Organization views, utilization metrics
+    executions/[id]             – execution detail: input/output, decision log, error logs
+    messages                    – inbox for agent → manager / agent → organization messages
 components/
   nav                           – top nav
   agents                        – directory controls, agent card, badges, follow button,
-                                   portfolio, activity feed, category picker, verification panel
+                                   portfolio, activity feed, category picker, verification panel,
+                                   capabilities panel, memory panel
   organizations                 – org card, tabs, departments/assignments/performance/activity/
                                    task-dashboard panels, workflow builder + run controls
   tasks                         – task card, queue controls, execution actions, review form,
-                                   history timeline, agent assignment control
-lib/                            – supabase clients, types, agents/registry/organizations/tasks data-access helpers
+                                   history timeline, agent assignment control, runtime execution
+                                   panel, delegation panel, execution row/view controls
+  messages                      – message row (inbox item, mark-as-read)
+lib/
+  providers                     – ModelProvider abstraction: OpenAI, Anthropic, local/Ollama
+  runtime                       – execution orchestration (decision engine -> provider -> tracking)
+  supabase, types, agents/registry/organizations/tasks/agentRuntime data-access helpers
 supabase/migrations             – database schema + RLS + RPCs
 middleware.ts                   – route protection
 ```

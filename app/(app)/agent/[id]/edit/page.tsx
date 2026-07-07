@@ -1,10 +1,12 @@
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { Agent, AgentCategory, AgentCredential, AgentVerification } from '@/lib/types'
+import { Agent, AgentCapability, AgentCategory, AgentCredential, AgentVerification } from '@/lib/types'
 import ManageAgentForm from '@/components/agents/ManageAgentForm'
 import CategoryPicker from '@/components/agents/CategoryPicker'
 import VerificationPanel from '@/components/agents/VerificationPanel'
+import CapabilitiesPanel from '@/components/agents/CapabilitiesPanel'
+import AgentMemoryPanel from '@/components/agents/AgentMemoryPanel'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,11 +20,13 @@ export default async function EditAgentPage({ params }: { params: Promise<{ id: 
   if (!agent) notFound()
   if (agent.owner_id !== user.id) redirect(`/agent/${id}`)
 
-  const [{ data: credentials }, { data: allCategories }, { data: categoryLinks }, { data: verifications }] = await Promise.all([
+  const [{ data: credentials }, { data: allCategories }, { data: categoryLinks }, { data: verifications }, { data: capabilities }, { data: memories }] = await Promise.all([
     supabase.from('agent_credentials').select('*').eq('agent_id', id).order('created_at', { ascending: false }),
     supabase.from('agent_categories').select('*').order('name'),
     supabase.from('agent_category_links').select('category_id').eq('agent_id', id),
     supabase.from('agent_verifications').select('*').eq('agent_id', id).order('created_at', { ascending: false }),
+    supabase.from('agent_capabilities').select('*').eq('agent_id', id).order('created_at', { ascending: false }),
+    supabase.from('agent_memory').select('*').eq('agent_id', id).order('updated_at', { ascending: false }).limit(50),
   ])
 
   const selectedCategoryIds = (categoryLinks || []).map((l) => l.category_id as string)
@@ -36,6 +40,8 @@ export default async function EditAgentPage({ params }: { params: Promise<{ id: 
       <ManageAgentForm agent={agent as Agent} credentials={(credentials as AgentCredential[]) || []} />
       <CategoryPicker agentId={id} allCategories={(allCategories as AgentCategory[]) || []} selectedIds={selectedCategoryIds} />
       <VerificationPanel agentId={id} currentLevel={agent.verification_level} verifications={(verifications as AgentVerification[]) || []} />
+      <CapabilitiesPanel agentId={id} capabilities={(capabilities as AgentCapability[]) || []} />
+      <AgentMemoryPanel agentId={id} memories={memories || []} />
     </div>
   )
 }
