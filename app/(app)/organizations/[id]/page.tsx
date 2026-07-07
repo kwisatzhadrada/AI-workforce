@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import {
   AgentAssignment, Organization, OrganizationActivity, OrganizationDepartment,
-  OrganizationMember, OrganizationMetrics, Workflow, WorkflowRun,
+  OrganizationMember, OrganizationMetrics, Task, Workflow, WorkflowRun,
 } from '@/lib/types'
 import { getInitials, getTrustScoreColor, formatTimeAgo } from '@/lib/utils'
 import OrgTabs from '@/components/organizations/OrgTabs'
@@ -15,10 +15,11 @@ import OrgActivityFeed from '@/components/organizations/OrgActivityFeed'
 import CreateWorkflowForm from '@/components/organizations/CreateWorkflowForm'
 import WorkflowCard from '@/components/organizations/WorkflowCard'
 import WorkflowRunsList from '@/components/organizations/WorkflowRunsList'
+import TaskDashboardPanel from '@/components/organizations/TaskDashboardPanel'
 
 export const dynamic = 'force-dynamic'
 
-const VALID_TABS = ['overview', 'departments', 'agents', 'performance', 'workflows', 'activity'] as const
+const VALID_TABS = ['overview', 'departments', 'agents', 'performance', 'tasks', 'workflows', 'activity'] as const
 type Tab = (typeof VALID_TABS)[number]
 
 export default async function OrganizationPage({
@@ -82,6 +83,7 @@ export default async function OrganizationPage({
       {tab === 'departments' && <DepartmentsTab organizationId={id} isManager={!!isManager} />}
       {tab === 'agents' && <AgentsTab organizationId={id} currentUserId={user.id} isManager={!!isManager} />}
       {tab === 'performance' && <PerformanceTab organizationId={id} metrics={metrics} />}
+      {tab === 'tasks' && <TasksTab organizationId={id} />}
       {tab === 'workflows' && <WorkflowsTab organizationId={id} currentUserId={user.id} isManager={!!isManager} />}
       {tab === 'activity' && <ActivityTab organizationId={id} />}
     </div>
@@ -254,6 +256,57 @@ async function WorkflowsTab({ organizationId, currentUserId, isManager }: { orga
 
       <WorkflowRunsList runs={runsWithStepName} isManager={isManager} />
     </div>
+  )
+}
+
+async function TasksTab({ organizationId }: { organizationId: string }) {
+  const supabase = await createClient()
+
+  const [{ count: tasksCompleted }, { count: tasksFailed }, { data: completedTasks }, { data: recentTasks }] = await Promise.all([
+    supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId).eq('status', 'completed'),
+    supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId).eq('status', 'failed'),
+    supabase
+      .from('tasks')
+      .select('execution_time_seconds, agents(name), organization_departments(name)')
+      .eq('organization_id', organizationId)
+      .eq('status', 'completed')
+      .limit(2000),
+    supabase
+      .from('tasks')
+      .select('*, organizations(id, name), organization_departments(id, name), agents(id, name, avatar_url, owner_id)')
+      .eq('organization_id', organizationId)
+      .order('created_at', { ascending: false })
+      .limit(10),
+  ])
+
+  const rows = (completedTasks || []) as unknown as {
+    execution_time_seconds: number | null
+    agents: { name: string } | null
+    organization_departments: { name: string } | null
+  }[]
+
+  const durations = rows.map((r) => r.execution_time_seconds).filter((v): v is number => v != null)
+  const avgCompletionSeconds = durations.length > 0 ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : null
+
+  const agentCounts = new Map<string, number>()
+  const deptCounts = new Map<string, number>()
+  for (const r of rows) {
+    if (r.agents?.name) agentCounts.set(r.agents.name, (agentCounts.get(r.agents.name) || 0) + 1)
+    if (r.organization_departments?.name) deptCounts.set(r.organization_departments.name, (deptCounts.get(r.organization_departments.name) || 0) + 1)
+  }
+  const topAgents = Array.from(agentCounts.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 5)
+  const topDepartments = Array.from(deptCounts.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 5)
+
+  return (
+    <TaskDashboardPanel
+      organizationId={organizationId}
+      tasksCompleted={tasksCompleted || 0}
+      tasksFailed={tasksFailed || 0}
+      avgCompletionSeconds={avgCompletionSeconds}
+      topAgents={topAgents}
+      topDepartments={topDepartments}
+      recentTasks={(recentTasks as Task[]) || []}
+    />
   )
 }
 

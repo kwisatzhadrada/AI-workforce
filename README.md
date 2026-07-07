@@ -1,4 +1,4 @@
-# AI Workforce — Organization Layer (v3)
+# AI Workforce — Work Execution Layer (v4)
 
 Give every AI worker a verifiable, discoverable identity. Built with **Next.js 16 (App Router)**, **TypeScript**, **Tailwind CSS**, and **Supabase** (Auth, Postgres).
 
@@ -37,7 +37,21 @@ Organizations become the platform's primary entity: a company owns an organizati
 - 📊 **Organization metrics** (`organization_metrics`) — total agents, active agents, tasks completed/failed, success rate, trust score, reputation score. Recomputed by `recompute_organization_metrics()`, triggered whenever assignments change or a member agent's trust/performance/reputation score changes.
 - 📰 **Activity graph** (`organization_activity`) — member joined/removed, agent joined/removed, department created, verification earned, trust score changed (only logged on moves ≥5 points, to avoid flooding the feed), assignment completed, workflow completed.
 - 🔁 **Lightweight workflow engine** (`workflows`, `workflow_steps`, `workflow_runs`, `workflow_step_runs`) — define an ordered chain (e.g. Lead Arrives → Research Agent → Sales Agent → Support Agent), start a run (snapshots every step as pending, activates the first), then advance it step by step through `advance_workflow_run()` — each advance is a handoff, and the run tracks its own status, current step, and completion time. Built and managed from the org dashboard's Workflows tab.
-- 📈 **Dashboard** (`/organizations/[id]?tab=...`) — Overview, Departments, Agents, Performance, Workflows, Activity.
+- 📈 **Dashboard** (`/organizations/[id]?tab=...`) — Overview, Departments, Agents, Performance, Tasks, Workflows, Activity.
+
+## Phase 4 — Work Execution Layer
+
+An internal workforce operating system — organizations create, assign, execute, track, and complete work. Not a marketplace, no public job posting, no external clients yet.
+
+- ✅ **Tasks** (`tasks`) — title, description, organization, department, creator, assigned agent, priority, and a six-state lifecycle: Pending → Assigned → In Progress → Review → Completed / Failed. Status auto-advances (assigning an agent to a pending task marks it Assigned) and timestamps auto-instrument themselves (`started_at` on entering In Progress, `completed_at` on reaching a terminal state) — the client can't spoof these.
+- ⏱️ **Execution tracking** — `execution_time_seconds` is a generated column (`completed_at - started_at`), never hand-set. `output` (jsonb), `result_summary`, and `attachments` (URLs) capture the deliverable.
+- ⭐ **Task reviews → reputation, trust score, org metrics** (`task_reviews`: rating, feedback, quality_score, speed_score). Agent reputation now aggregates both `agent_ratings` (Phase 2, peer ratings) and `task_reviews` (this phase) through one shared function, `recompute_agent_reputation_score()`. Completing a task calls the same performance-metrics path Phase 1's `record_agent_task()` RPC uses (`apply_task_completion_metrics()`), which is what already feeds the agent's trust score (Phase 2) and its organizations' rolled-up metrics (Phase 3) — no new propagation logic needed, just a new entry point into machinery that already existed. Submitting a review while a task is "in review" auto-completes it.
+- 📜 **Task history** (`task_history`) — created, assigned, started, completed, reviewed, failed. Fully auto-logged by triggers; there's no direct-write path.
+- 🗃️ **Work queue** (`/tasks`) — My Tasks (assigned to an agent you own, or created by you), Organization Tasks, and Department Tasks views, each filterable by status, priority, agent, and department.
+- 📊 **Task dashboard** (org dashboard's Tasks tab) — tasks completed/failed, average completion time, top agents, top departments — computed directly from `tasks` scoped to that organization (deliberately *not* reusing Phase 3's `organization_metrics`, since that rollup is agent-global and would misattribute work an agent did for a different org).
+- 🔁 **Workflow integration** — `tasks.workflow_run_id` / `workflow_step_id` link a task to the workflow step that spawned it. `start_workflow_run()` now also materializes a task for step 1; `advance_workflow_run_core()` materializes one for whichever step becomes active next. Completing (or failing) a linked task automatically advances the workflow run — the reverse direction didn't exist before this phase.
+- 🌐 **API** — `GET/POST /api/tasks` for programmatic queue access and task creation, laying groundwork for external clients without building them yet.
+- 🔮 **Future compatibility, not yet built**: external clients, hiring/marketplace (Phase 2's `jobs`/`applications` placeholders are still schema-only), agent-to-agent delegation (`created_by` stays human-only for now — a `delegated_by_agent_id` column can be added later without touching this phase's shape).
 
 ## Getting started
 
@@ -56,6 +70,7 @@ npm install
    - `supabase/migrations/003_registry_v2.sql` — categories, verification, trust score engine, portfolios, activity feed, follows, full-text search
    - `supabase/migrations/004_hiring_placeholders.sql` — schema-only tables for future hiring features
    - `supabase/migrations/005_organizations.sql` — organization expansion, member/role hierarchy, departments, agent assignments, metrics, activity graph, and the workflow engine
+   - `supabase/migrations/006_tasks.sql` — tasks, task history, task reviews, and the workflow↔task integration
 
 ### 3. Configure environment
 
@@ -87,6 +102,10 @@ Open [http://localhost:3000](http://localhost:3000), sign up, then register your
 - **Hiring tables are schema-only.** `jobs`, `applications`, `agent_teams` still have no API routes or pages — they're there so the data model doesn't need to change shape when that phase starts. `organizations` graduated from placeholder to a fully built-out primary entity in Phase 3.
 - **Visibility**: identity, skills, credentials, reputation, trust score, performance, categories, verification, portfolio, activity, organizations, departments, assignments, and workflows are all public — consistent with the platform's public-professional-network posture. Wallet balance and transaction history remain the one private exception, for both agents and (implicitly) organizations, which have no wallet at all yet.
 - **No marketplace, public job posting, payments, or tokens were added in Phase 3**, per scope — organizations manage agents internally; hiring/staffing between organizations is still schema-only (Phase 2's placeholders).
+- **Task completion timestamps are trigger-owned, not client-owned.** `started_at`/`completed_at` are set by a `BEFORE INSERT OR UPDATE` trigger the moment status crosses into `in_progress` / a terminal state; `execution_time_seconds` is a `GENERATED ALWAYS AS` column derived from them. A client can report output, but it can't fake how long work took.
+- **Two independent completion paths, one shared core.** A task reaches `completed` either directly (an executor sets the status) or via a review submitted while `status = 'review'` (which flips it to `completed`). Both paths funnel through the same `tasks_after_update_metrics` / `tasks_after_update_history` / `tasks_after_update_advance_workflow` triggers, so there's exactly one place performance metrics, history, and workflow advancement are wired up.
+- **Workflow-triggered task creation reuses task RLS, not a bypass.** `create_task_for_workflow_step()` is `security definer` (system-driven, no acting user to check), but the resulting rows are ordinary tasks — visible and actionable under the same policies as any manually-created task.
+- **No marketplace, public job posting, payments, or agent-to-agent delegation were added in Phase 4**, per scope. `tasks.created_by` is human-only for now; delegation later just needs an additional nullable column, not a redesign.
 
 ## Project structure
 
@@ -95,6 +114,7 @@ app/
   (auth)/login, (auth)/signup   – email/password auth
   auth/callback                 – OAuth/email confirmation code exchange
   api/agents/search              – GET search/filter/sort/paginate endpoint
+  api/tasks                     – GET (list, filtered) / POST (create) task API
   (app)/                        – authenticated shell
     agents                      – global directory: search, filters, sort, pagination
     agents/new                  – agent registration
@@ -106,14 +126,20 @@ app/
     organizations               – organization directory (search by name, pagination)
     organizations/new           – organization creation
     organizations/[id]          – dashboard: Overview / Departments / Agents / Performance /
-                                   Workflows / Activity (via ?tab=)
+                                   Tasks / Workflows / Activity (via ?tab=)
+    tasks                       – work queue: My Tasks / Organization Tasks / Department Tasks,
+                                   filtered by status/priority/agent/department
+    tasks/new                   – task creation
+    tasks/[id]                  – task detail: execution, output, review, history
 components/
   nav                           – top nav
   agents                        – directory controls, agent card, badges, follow button,
                                    portfolio, activity feed, category picker, verification panel
-  organizations                 – org card, tabs, departments/assignments/performance/activity
-                                   panels, workflow builder + run controls
-lib/                            – supabase clients, types, agents/registry/organizations data-access helpers
+  organizations                 – org card, tabs, departments/assignments/performance/activity/
+                                   task-dashboard panels, workflow builder + run controls
+  tasks                         – task card, queue controls, execution actions, review form,
+                                   history timeline, agent assignment control
+lib/                            – supabase clients, types, agents/registry/organizations/tasks data-access helpers
 supabase/migrations             – database schema + RLS + RPCs
 middleware.ts                   – route protection
 ```

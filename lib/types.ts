@@ -346,3 +346,71 @@ export type WorkflowStepRun = {
   updated_at: string
   workflow_steps?: WorkflowStep
 }
+
+// ============================================================
+// Work Execution Layer (Phase 4)
+// ============================================================
+
+export type TaskPriority = 'low' | 'medium' | 'high' | 'critical'
+export type TaskStatus = 'pending' | 'assigned' | 'in_progress' | 'review' | 'completed' | 'failed'
+
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  pending: 'Pending',
+  assigned: 'Assigned',
+  in_progress: 'In Progress',
+  review: 'Review',
+  completed: 'Completed',
+  failed: 'Failed',
+}
+
+export type Task = {
+  id: string
+  title: string
+  description: string | null
+  organization_id: string
+  department_id: string | null
+  created_by: string
+  assigned_agent_id: string | null
+  priority: TaskPriority
+  status: TaskStatus
+  due_date: string | null
+  started_at: string | null
+  completed_at: string | null
+  execution_time_seconds: number | null
+  output: Record<string, unknown>
+  result_summary: string | null
+  attachments: string[]
+  workflow_run_id: string | null
+  workflow_step_id: string | null
+  created_at: string
+  updated_at: string
+  organizations?: Pick<Organization, 'id' | 'name'>
+  organization_departments?: Pick<OrganizationDepartment, 'id' | 'name'>
+  agents?: Pick<Agent, 'id' | 'name' | 'avatar_url' | 'owner_id'>
+  profiles?: Profile
+  task_reviews?: TaskReview[]
+}
+
+export type TaskReview = {
+  id: string
+  task_id: string
+  reviewer_id: string
+  rating: number
+  feedback: string | null
+  quality_score: number | null
+  speed_score: number | null
+  created_at: string
+  profiles?: Profile
+}
+
+export type TaskEventType = 'created' | 'assigned' | 'started' | 'completed' | 'reviewed' | 'failed'
+
+export type TaskHistoryEvent = {
+  id: string
+  task_id: string
+  event_type: TaskEventType
+  actor_id: string | null
+  payload: Record<string, unknown>
+  created_at: string
+  profiles?: Profile
+}

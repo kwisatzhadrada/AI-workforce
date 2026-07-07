@@ -45,6 +45,12 @@ export default function Nav({ profile }: { profile: Profile }) {
           >
             Organizations
           </Link>
+          <Link
+            href="/tasks"
+            className={`text-sm font-medium ${pathname.startsWith('/tasks') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
+          >
+            Tasks
+          </Link>
           {profile.is_admin && (
             <Link
               href="/admin/verifications"

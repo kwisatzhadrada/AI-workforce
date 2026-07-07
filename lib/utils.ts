@@ -142,3 +142,47 @@ export function getWorkflowStatusColor(status: string): string {
     default: return 'text-gray-400 bg-gray-400/10 border-gray-400/20'
   }
 }
+
+export function getTaskStatusColor(status: string): string {
+  switch (status) {
+    case 'pending': return 'text-gray-400 bg-gray-400/10 border-gray-400/20'
+    case 'assigned': return 'text-blue-400 bg-blue-400/10 border-blue-400/20'
+    case 'in_progress': return 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20'
+    case 'review': return 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20'
+    case 'completed': return 'text-green-400 bg-green-400/10 border-green-400/20'
+    case 'failed': return 'text-red-400 bg-red-400/10 border-red-400/20'
+    default: return 'text-gray-400 bg-gray-400/10 border-gray-400/20'
+  }
+}
+
+export function formatDuration(seconds: number | null | undefined): string {
+  if (seconds == null) return '—'
+  if (seconds < 60) return `${seconds}s`
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m`
+  if (seconds < 86400) return `${(seconds / 3600).toFixed(1)}h`
+  return `${(seconds / 86400).toFixed(1)}d`
+}
+
+export function getTaskEventIcon(type: string): string {
+  switch (type) {
+    case 'created': return '🆕'
+    case 'assigned': return '🎯'
+    case 'started': return '▶️'
+    case 'completed': return '✅'
+    case 'reviewed': return '📝'
+    case 'failed': return '❌'
+    default: return '•'
+  }
+}
+
+export function getTaskEventLabel(type: string, payload: Record<string, unknown>): string {
+  switch (type) {
+    case 'created': return `Task created: "${payload.title ?? ''}"`
+    case 'assigned': return 'Assigned to an agent'
+    case 'started': return 'Work started'
+    case 'completed': return 'Task completed'
+    case 'reviewed': return `Reviewed: ${payload.rating ?? ''}/5`
+    case 'failed': return 'Task failed'
+    default: return 'Event'
+  }
+}
