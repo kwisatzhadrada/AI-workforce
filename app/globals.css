@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #08081C;
+  --bg2: #0C0D22;
+  --s1: #121428;
+  --s2: #181A30;
+  --p: #6D28D9;
+  --p2: #8B5CF6;
+  --g: #16A34A;
+  --g2: #22C55E;
+  --r: #DC2626;
+  --r2: #EF4444;
+  --t1: #EDEAF8;
+  --t2: #8A88A8;
+  --t3: #3C3A58;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--t1);
+  font-family: var(--font-inter), 'Inter', sans-serif;
+}
