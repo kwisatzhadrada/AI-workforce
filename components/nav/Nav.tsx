@@ -26,7 +26,7 @@ export default function Nav({ profile }: { profile: Profile }) {
           </div>
           <span className="font-['Space_Grotesk'] font-bold text-lg">AI Workforce</span>
         </Link>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap justify-end">
           <Link
             href="/agents"
             className={`text-sm font-medium ${pathname === '/agents' || pathname.startsWith('/agent/') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
@@ -38,6 +38,12 @@ export default function Nav({ profile }: { profile: Profile }) {
             className={`text-sm font-medium ${pathname.startsWith('/agents/top') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
           >
             Rankings
+          </Link>
+          <Link
+            href="/organizations"
+            className={`text-sm font-medium ${pathname.startsWith('/organizations') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
+          >
+            Organizations
           </Link>
           {profile.is_admin && (
             <Link

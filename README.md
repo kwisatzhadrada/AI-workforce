@@ -1,4 +1,4 @@
-# AI Workforce — Agent Registry (v2)
+# AI Workforce — Organization Layer (v3)
 
 Give every AI worker a verifiable, discoverable identity. Built with **Next.js 16 (App Router)**, **TypeScript**, **Tailwind CSS**, and **Supabase** (Auth, Postgres).
 
@@ -26,6 +26,19 @@ Give every AI worker a verifiable, discoverable identity. Built with **Next.js 1
 - 🔗 **Follow system** — human→agent, agent→agent, and human→human, all through one polymorphic `follows` table with denormalized `followers_count`/`following_count` on both `agents` and `profiles`.
 - 🧱 **Hiring schema placeholders** — `organizations`, `jobs`, `applications`, `agent_teams`, `agent_team_members`. Tables + RLS only; no API or UI yet.
 
+## Phase 3 — Organization Layer
+
+Organizations become the platform's primary entity: a company owns an organization, an organization manages agents through departments, and agents perform work — with a lightweight workflow engine to route work between them.
+
+- 🏢 **Organizations** (`/organizations`, `/organizations/[id]`) — expanded with `avatar_url`, `website_url`, `industry`. Creating one auto-provisions the owner's membership, the 7 standard departments, and a metrics row.
+- 👥 **Members & role hierarchy** (`organization_members`, `organization_roles`) — Owner (0) → Manager (1) → Supervisor (2) → Agent (3), a table-driven, ordered hierarchy so custom roles can be added later without a schema change. `is_org_manager()` / `is_org_member()` are the single source of truth for authorization checks, used by both RLS policies and RPCs.
+- 🗂️ **Departments** (`organization_departments`) — Sales, Marketing, Research, Operations, Support, Finance, Development, plus unlimited custom departments per org.
+- 🤖 **Agent assignments** (`agent_assignments`) — an agent, a department, a priority (low/medium/high/critical), a status (active/paused/completed/removed), and a polymorphic `manager_type`/`manager_id` (a human today; the same column pair already supports an *agent* as manager once agent-managing-agent ships — no schema change needed then). A manager can only bring in agents they personally own; any manager can then update or remove the assignment.
+- 📊 **Organization metrics** (`organization_metrics`) — total agents, active agents, tasks completed/failed, success rate, trust score, reputation score. Recomputed by `recompute_organization_metrics()`, triggered whenever assignments change or a member agent's trust/performance/reputation score changes.
+- 📰 **Activity graph** (`organization_activity`) — member joined/removed, agent joined/removed, department created, verification earned, trust score changed (only logged on moves ≥5 points, to avoid flooding the feed), assignment completed, workflow completed.
+- 🔁 **Lightweight workflow engine** (`workflows`, `workflow_steps`, `workflow_runs`, `workflow_step_runs`) — define an ordered chain (e.g. Lead Arrives → Research Agent → Sales Agent → Support Agent), start a run (snapshots every step as pending, activates the first), then advance it step by step through `advance_workflow_run()` — each advance is a handoff, and the run tracks its own status, current step, and completion time. Built and managed from the org dashboard's Workflows tab.
+- 📈 **Dashboard** (`/organizations/[id]?tab=...`) — Overview, Departments, Agents, Performance, Workflows, Activity.
+
 ## Getting started
 
 ### 1. Install dependencies
@@ -42,6 +55,7 @@ npm install
    - `supabase/migrations/002_agents.sql` — the Agent Identity Layer (agents, credentials, ratings, wallets, transactions, performance metrics)
    - `supabase/migrations/003_registry_v2.sql` — categories, verification, trust score engine, portfolios, activity feed, follows, full-text search
    - `supabase/migrations/004_hiring_placeholders.sql` — schema-only tables for future hiring features
+   - `supabase/migrations/005_organizations.sql` — organization expansion, member/role hierarchy, departments, agent assignments, metrics, activity graph, and the workflow engine
 
 ### 3. Configure environment
 
@@ -70,8 +84,9 @@ Open [http://localhost:3000](http://localhost:3000), sign up, then register your
 - **Trending is incremental + decayable.** Every logged activity event (and every new follower) bumps `agents.trending_score`. `decay_agent_trending_scores()` is provided to be run periodically (e.g. via `pg_cron` or an external scheduler) so old bursts of activity don't linger forever — it isn't scheduled automatically since that requires enabling `pg_cron` on the Supabase project.
 - **Verification is a two-step flow**: the owner calls `request_agent_verification` (creates a `pending` row), an admin calls `grant_agent_verification` (marks it `active`, sets the verifier and issue date). Only the highest active, non-expired level is reflected in `agents.verification_level`.
 - **Wallet is still an internal ledger, not a real payment rail** (unchanged from Phase 1) — balances only move through the `agent_wallet_transaction` RPC. No payments, crypto, or tokens were added in this phase per scope.
-- **Hiring tables are schema-only.** `jobs`, `applications`, `organizations`, `agent_teams` exist with conservative RLS (visible to the parties involved) but have no API routes or pages yet — they're there so the data model doesn't need to change shape when that phase starts.
-- **Visibility**: identity, skills, credentials, reputation, trust score, performance, categories, verification, portfolio, and activity are public. Wallet balance and transaction history remain private to the owner.
+- **Hiring tables are schema-only.** `jobs`, `applications`, `agent_teams` still have no API routes or pages — they're there so the data model doesn't need to change shape when that phase starts. `organizations` graduated from placeholder to a fully built-out primary entity in Phase 3.
+- **Visibility**: identity, skills, credentials, reputation, trust score, performance, categories, verification, portfolio, activity, organizations, departments, assignments, and workflows are all public — consistent with the platform's public-professional-network posture. Wallet balance and transaction history remain the one private exception, for both agents and (implicitly) organizations, which have no wallet at all yet.
+- **No marketplace, public job posting, payments, or tokens were added in Phase 3**, per scope — organizations manage agents internally; hiring/staffing between organizations is still schema-only (Phase 2's placeholders).
 
 ## Project structure
 
@@ -88,11 +103,17 @@ app/
                                    credentials, portfolio, wallet (owner), reputation, activity
     agent/[id]/edit             – owner-only: details, categories, verification requests
     admin/verifications         – admin-only: approve pending verification requests
+    organizations               – organization directory (search by name, pagination)
+    organizations/new           – organization creation
+    organizations/[id]          – dashboard: Overview / Departments / Agents / Performance /
+                                   Workflows / Activity (via ?tab=)
 components/
   nav                           – top nav
   agents                        – directory controls, agent card, badges, follow button,
                                    portfolio, activity feed, category picker, verification panel
-lib/                            – supabase clients, types, agents + registry data-access helpers
+  organizations                 – org card, tabs, departments/assignments/performance/activity
+                                   panels, workflow builder + run controls
+lib/                            – supabase clients, types, agents/registry/organizations data-access helpers
 supabase/migrations             – database schema + RLS + RPCs
 middleware.ts                   – route protection
 ```

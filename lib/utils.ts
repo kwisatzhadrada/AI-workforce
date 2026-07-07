@@ -76,3 +76,69 @@ export function getActivityLabel(type: string, payload: Record<string, unknown>)
     default: return 'Activity'
   }
 }
+
+export function getAssignmentPriorityColor(priority: string): string {
+  switch (priority) {
+    case 'critical': return 'text-red-400 bg-red-400/10 border-red-400/20'
+    case 'high': return 'text-orange-400 bg-orange-400/10 border-orange-400/20'
+    case 'medium': return 'text-blue-400 bg-blue-400/10 border-blue-400/20'
+    case 'low': return 'text-gray-400 bg-gray-400/10 border-gray-400/20'
+    default: return 'text-gray-400 bg-gray-400/10 border-gray-400/20'
+  }
+}
+
+export function getAssignmentStatusColor(status: string): string {
+  switch (status) {
+    case 'active': return 'text-green-400 bg-green-400/10 border-green-400/20'
+    case 'paused': return 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20'
+    case 'completed': return 'text-blue-400 bg-blue-400/10 border-blue-400/20'
+    case 'removed': return 'text-gray-400 bg-gray-400/10 border-gray-400/20'
+    default: return 'text-gray-400 bg-gray-400/10 border-gray-400/20'
+  }
+}
+
+export function getOrgActivityIcon(type: string): string {
+  switch (type) {
+    case 'member_joined': return '👋'
+    case 'member_removed': return '🚪'
+    case 'agent_joined': return '🤖'
+    case 'agent_removed': return '📤'
+    case 'department_created': return '🏢'
+    case 'verification_earned': return '✅'
+    case 'trust_score_changed': return '📈'
+    case 'assignment_completed': return '✔️'
+    case 'workflow_completed': return '🔁'
+    default: return '•'
+  }
+}
+
+export function getOrgActivityLabel(type: string, payload: Record<string, unknown>): string {
+  switch (type) {
+    case 'member_joined': return 'A new member joined'
+    case 'member_removed': return 'A member left'
+    case 'agent_joined': return 'An agent joined the organization'
+    case 'agent_removed': return 'An agent was removed'
+    case 'department_created': return `Department "${payload.name ?? ''}" was created`
+    case 'verification_earned': return `An agent reached verification level ${payload.level ?? ''}`
+    case 'trust_score_changed': {
+      const oldScore = Number(payload.old_score ?? 0)
+      const newScore = Number(payload.new_score ?? 0)
+      const direction = newScore >= oldScore ? 'up' : 'down'
+      return `${payload.agent_name ?? 'An agent'}'s trust score moved ${direction} to ${newScore.toFixed(0)}`
+    }
+    case 'assignment_completed': return 'An assignment was completed'
+    case 'workflow_completed': return 'A workflow run completed'
+    default: return 'Activity'
+  }
+}
+
+export function getWorkflowStatusColor(status: string): string {
+  switch (status) {
+    case 'completed': return 'text-green-400 bg-green-400/10 border-green-400/20'
+    case 'in_progress': return 'text-blue-400 bg-blue-400/10 border-blue-400/20'
+    case 'failed': return 'text-red-400 bg-red-400/10 border-red-400/20'
+    case 'cancelled': return 'text-gray-400 bg-gray-400/10 border-gray-400/20'
+    case 'pending': return 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20'
+    default: return 'text-gray-400 bg-gray-400/10 border-gray-400/20'
+  }
+}

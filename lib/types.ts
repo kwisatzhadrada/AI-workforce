@@ -194,3 +194,155 @@ export type AgentSearchResult = {
   created_at: string
   total_count: number
 }
+
+// ============================================================
+// Organization Layer (Phase 3)
+// ============================================================
+
+export type Organization = {
+  id: string
+  owner_id: string
+  name: string
+  slug: string | null
+  description: string | null
+  avatar_url: string | null
+  website_url: string | null
+  industry: string | null
+  created_at: string
+  updated_at: string
+  profiles?: Profile
+  organization_metrics?: OrganizationMetrics
+}
+
+export type OrgRoleSlug = 'owner' | 'manager' | 'supervisor' | 'agent'
+
+export type OrganizationRole = {
+  id: string
+  slug: OrgRoleSlug
+  name: string
+  level: number
+  created_at: string
+}
+
+export type OrganizationMember = {
+  id: string
+  organization_id: string
+  user_id: string
+  role_id: string
+  invited_by: string | null
+  created_at: string
+  updated_at: string
+  profiles?: Profile
+  organization_roles?: OrganizationRole
+}
+
+export type OrganizationDepartment = {
+  id: string
+  organization_id: string
+  name: string
+  slug: string
+  is_custom: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type AssignmentPriority = 'low' | 'medium' | 'high' | 'critical'
+export type AssignmentStatus = 'active' | 'paused' | 'completed' | 'removed'
+
+export type AgentAssignment = {
+  id: string
+  agent_id: string
+  organization_id: string
+  department_id: string | null
+  manager_type: FollowEntityType | null
+  manager_id: string | null
+  priority: AssignmentPriority
+  status: AssignmentStatus
+  assigned_by: string
+  created_at: string
+  updated_at: string
+  agents?: Pick<Agent, 'id' | 'name' | 'avatar_url' | 'status' | 'trust_score' | 'owner_id'>
+  organization_departments?: OrganizationDepartment
+}
+
+export type OrganizationMetrics = {
+  organization_id: string
+  total_agents: number
+  active_agents: number
+  tasks_completed: number
+  tasks_failed: number
+  success_rate: number
+  trust_score: number
+  reputation_score: number
+  updated_at: string
+}
+
+export type OrganizationActivityType =
+  | 'member_joined' | 'member_removed' | 'agent_joined' | 'agent_removed'
+  | 'department_created' | 'verification_earned' | 'trust_score_changed'
+  | 'assignment_completed' | 'workflow_completed'
+
+export type OrganizationActivity = {
+  id: string
+  organization_id: string
+  activity_type: OrganizationActivityType
+  payload: Record<string, unknown>
+  created_at: string
+}
+
+export type WorkflowStatus = 'draft' | 'active' | 'archived'
+
+export type Workflow = {
+  id: string
+  organization_id: string
+  name: string
+  description: string | null
+  status: WorkflowStatus
+  created_by: string
+  created_at: string
+  updated_at: string
+  workflow_steps?: WorkflowStep[]
+}
+
+export type WorkflowStep = {
+  id: string
+  workflow_id: string
+  step_order: number
+  name: string
+  department_id: string | null
+  agent_id: string | null
+  created_at: string
+  organization_departments?: OrganizationDepartment
+  agents?: Pick<Agent, 'id' | 'name' | 'avatar_url'>
+}
+
+export type WorkflowRunStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
+
+export type WorkflowRun = {
+  id: string
+  workflow_id: string
+  organization_id: string
+  status: WorkflowRunStatus
+  current_step_order: number
+  started_at: string | null
+  completed_at: string | null
+  created_at: string
+  updated_at: string
+  workflows?: Pick<Workflow, 'id' | 'name'>
+}
+
+export type WorkflowStepRunStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'skipped'
+
+export type WorkflowStepRun = {
+  id: string
+  workflow_run_id: string
+  workflow_step_id: string
+  agent_id: string | null
+  status: WorkflowStepRunStatus
+  notes: string | null
+  started_at: string | null
+  completed_at: string | null
+  created_at: string
+  updated_at: string
+  workflow_steps?: WorkflowStep
+}
