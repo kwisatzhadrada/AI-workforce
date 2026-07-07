@@ -1,78 +1,88 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
 import { createClient } from '@/lib/supabase/server'
-import { Agent } from '@/lib/types'
-import { getAgentStatusColor, getInitials, formatTimeAgo } from '@/lib/utils'
+import { searchAgents } from '@/lib/registry'
+import { AgentCategory, AgentSortOption } from '@/lib/types'
+import DirectoryControls from '@/components/agents/DirectoryControls'
+import AgentCard from '@/components/agents/AgentCard'
+import Pagination from '@/components/agents/Pagination'
 
 export const dynamic = 'force-dynamic'
 
-export default async function AgentsPage() {
+const PAGE_SIZE = 20
+
+export default async function AgentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const params = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: agents } = await supabase
-    .from('agents')
-    .select('*, profiles!agents_owner_id_fkey(*)')
-    .order('reputation_score', { ascending: false })
-    .limit(50)
+  const get = (key: string) => {
+    const v = params[key]
+    return Array.isArray(v) ? v[0] : v
+  }
+
+  const page = Math.max(1, Number(get('page')) || 1)
+
+  const [{ data: categories }, { agents, total, error }] = await Promise.all([
+    supabase.from('agent_categories').select('*').order('name'),
+    searchAgents(supabase, {
+      query: get('q'),
+      categorySlug: get('category'),
+      status: get('status'),
+      minReputation: get('min_rep') ? Number(get('min_rep')) : undefined,
+      minVerificationLevel: get('min_ver') ? Number(get('min_ver')) : undefined,
+      minPerformance: get('min_perf') ? Number(get('min_perf')) : undefined,
+      sort: (get('sort') as AgentSortOption) || 'top_rated',
+      page,
+      pageSize: PAGE_SIZE,
+    }),
+  ])
+
+  const ownerIds = Array.from(new Set(agents.map((a) => a.owner_id)))
+  const { data: owners } = ownerIds.length
+    ? await supabase.from('profiles').select('id, full_name').in('id', ownerIds)
+    : { data: [] }
+  const ownerNameById = new Map((owners || []).map((o) => [o.id, o.full_name || 'Unknown']))
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-2">
         <div>
           <h1 className="font-['Space_Grotesk'] text-2xl font-bold">Agents</h1>
-          <p className="text-[#8A88A8] text-sm mt-1">AI workers, identified, rated, and ready to work.</p>
+          <p className="text-[#8A88A8] text-sm mt-1">The discoverable network of AI workers.</p>
         </div>
-        <Link href="/agents/new" className="bg-[#6D28D9] hover:bg-[#8B5CF6] text-white px-4 py-2 rounded-xl font-medium text-sm">
-          + New Agent
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/agents/top" className="text-sm text-[#8A88A8] hover:text-[#EDEAF8] border border-[#3C3A58] px-4 py-2 rounded-xl">
+            Rankings
+          </Link>
+          <Link href="/agents/new" className="bg-[#6D28D9] hover:bg-[#8B5CF6] text-white px-4 py-2 rounded-xl font-medium text-sm">
+            + New Agent
+          </Link>
+        </div>
       </div>
 
+      <DirectoryControls categories={(categories as AgentCategory[]) || []} />
+
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg px-4 py-3 mb-5 text-sm">{error}</div>
+      )}
+
       <div className="space-y-4">
-        {(agents as Agent[] || []).length === 0 ? (
-          <div className="text-center text-[#8A88A8] py-16">No agents yet. Register the first AI worker.</div>
+        {agents.length === 0 ? (
+          <div className="text-center text-[#8A88A8] py-16">No agents match your search.</div>
         ) : (
-          (agents as Agent[]).map((agent) => (
-            <Link key={agent.id} href={`/agent/${agent.id}`} className="block bg-[#0C0D22] border border-[#3C3A58]/30 hover:border-[#6D28D9]/40 rounded-2xl p-5 transition-colors">
-              <div className="flex items-start gap-3">
-                {agent.avatar_url ? (
-                  <Image src={agent.avatar_url} alt="" width={40} height={40} className="rounded-full object-cover w-10 h-10 shrink-0" />
-                ) : (
-                  <div className="w-10 h-10 rounded-full bg-[#6D28D9] flex items-center justify-center font-semibold text-white shrink-0">
-                    {getInitials(agent.name)}
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <h2 className="font-['Space_Grotesk'] font-bold text-lg text-[#EDEAF8]">{agent.name}</h2>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs border ${getAgentStatusColor(agent.status)}`}>
-                      {agent.status}
-                    </span>
-                  </div>
-                  <div className="text-xs text-[#8A88A8] mb-2">
-                    Owned by {agent.profiles?.full_name || 'Unknown'} · {formatTimeAgo(agent.created_at)}
-                  </div>
-                  {agent.description && (
-                    <p className="text-[#8A88A8] text-sm line-clamp-2 mb-3">{agent.description}</p>
-                  )}
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <span className="text-xs text-[#8B5CF6] font-medium">
-                      ⭐ {agent.reputation_score.toFixed(2)} ({agent.rating_count})
-                    </span>
-                    {agent.skills.slice(0, 4).map((skill) => (
-                      <span key={skill} className="text-xs px-2 py-0.5 rounded-md bg-[#121428] border border-[#3C3A58] text-[#8A88A8]">
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </Link>
+          agents.map((agent) => (
+            <AgentCard key={agent.id} agent={agent} ownerName={ownerNameById.get(agent.owner_id)} />
           ))
         )}
       </div>
+
+      <Pagination page={page} pageSize={PAGE_SIZE} total={total} />
     </div>
   )
 }

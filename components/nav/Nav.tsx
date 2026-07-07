@@ -29,10 +29,24 @@ export default function Nav({ profile }: { profile: Profile }) {
         <div className="flex items-center gap-4">
           <Link
             href="/agents"
-            className={`text-sm font-medium ${pathname.startsWith('/agents') || pathname.startsWith('/agent/') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
+            className={`text-sm font-medium ${pathname === '/agents' || pathname.startsWith('/agent/') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
           >
             Agents
           </Link>
+          <Link
+            href="/agents/top"
+            className={`text-sm font-medium ${pathname.startsWith('/agents/top') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
+          >
+            Rankings
+          </Link>
+          {profile.is_admin && (
+            <Link
+              href="/admin/verifications"
+              className={`text-sm font-medium ${pathname.startsWith('/admin') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
+            >
+              Admin
+            </Link>
+          )}
           <div className="w-8 h-8 rounded-full bg-[#6D28D9] flex items-center justify-center text-xs font-semibold text-white">
             {getInitials(profile.full_name)}
           </div>

@@ -2,10 +2,18 @@ import { notFound, redirect } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { AgentCredential, AgentRating, AgentTransaction, AgentWallet, AgentPerformanceMetrics } from '@/lib/types'
-import { getAgentStatusColor, getInitials, formatTimeAgo } from '@/lib/utils'
+import {
+  AgentActivity, AgentCategory, AgentCredential, AgentProject, AgentRating, AgentTransaction,
+  AgentWallet, AgentPerformanceMetrics,
+} from '@/lib/types'
+import { getAgentStatusColor, getInitials, formatTimeAgo, getTrustScoreColor } from '@/lib/utils'
 import RateAgentForm from '@/components/agents/RateAgentForm'
 import WalletPanel from '@/components/agents/WalletPanel'
+import VerificationBadge from '@/components/agents/VerificationBadge'
+import CategoryBadges from '@/components/agents/CategoryBadges'
+import FollowButton from '@/components/agents/FollowButton'
+import PortfolioSection from '@/components/agents/PortfolioSection'
+import ActivityFeed from '@/components/agents/ActivityFeed'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,7 +33,10 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
 
   const isOwner = agent.owner_id === user.id
 
-  const [{ data: credentials }, { data: ratings }, { data: myRating }, { data: wallet }, { data: transactions }] = await Promise.all([
+  const [
+    { data: credentials }, { data: ratings }, { data: myRating }, { data: wallet }, { data: transactions },
+    { data: categoryLinks }, { data: projects }, { data: activity }, { data: myFollow },
+  ] = await Promise.all([
     supabase.from('agent_credentials').select('*').eq('agent_id', id).order('created_at', { ascending: false }),
     supabase.from('agent_ratings').select('*, profiles(*)').eq('agent_id', id).order('created_at', { ascending: false }).limit(20),
     supabase.from('agent_ratings').select('*').eq('agent_id', id).eq('rater_id', user.id).maybeSingle(),
@@ -35,10 +46,15 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
     isOwner
       ? supabase.from('agent_transactions').select('*').eq('agent_id', id).order('created_at', { ascending: false }).limit(50)
       : Promise.resolve({ data: null }),
+    supabase.from('agent_category_links').select('agent_categories(*)').eq('agent_id', id),
+    supabase.from('agent_projects').select('*').eq('agent_id', id).order('created_at', { ascending: false }),
+    supabase.from('agent_activity').select('*').eq('agent_id', id).order('created_at', { ascending: false }).limit(30),
+    supabase.from('follows').select('id').eq('follower_type', 'user').eq('follower_id', user.id).eq('followee_type', 'agent').eq('followee_id', id).maybeSingle(),
   ])
 
   const perf = agent.agent_performance_metrics as AgentPerformanceMetrics | AgentPerformanceMetrics[] | null
   const performance = Array.isArray(perf) ? perf[0] : perf
+  const categories = ((categoryLinks || []) as unknown as { agent_categories: AgentCategory }[]).map((l) => l.agent_categories)
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -54,23 +70,35 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
               </div>
             )}
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="font-['Space_Grotesk'] text-xl font-bold text-[#EDEAF8]">{agent.name}</h1>
                 <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs border ${getAgentStatusColor(agent.status)}`}>
                   {agent.status}
                 </span>
+                <VerificationBadge level={agent.verification_level} />
               </div>
               <div className="text-xs text-[#8A88A8] mt-0.5">
                 Agent ID: <span className="font-mono">{agent.id}</span>
               </div>
             </div>
           </div>
+          {!isOwner && (
+            <FollowButton
+              currentUserId={user.id}
+              agentId={agent.id}
+              initialFollowing={!!myFollow}
+              followersCount={agent.followers_count}
+            />
+          )}
         </div>
 
         <div className="text-sm text-[#8A88A8] mb-4">
           Owner: <span className="text-[#EDEAF8]">{agent.profiles?.full_name || 'Unknown'}</span>
           {' '}· registered {formatTimeAgo(agent.created_at)}
+          {' '}· {agent.followers_count} follower{agent.followers_count === 1 ? '' : 's'}
         </div>
+
+        {categories.length > 0 && <div className="mb-4"><CategoryBadges categories={categories} /></div>}
 
         {agent.description && <p className="text-[#EDEAF8] mb-4 leading-relaxed">{agent.description}</p>}
 
@@ -89,9 +117,15 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-lg font-semibold text-yellow-400">⭐ {agent.reputation_score.toFixed(2)}</span>
-          <span className="text-sm text-[#8A88A8]">({agent.rating_count} rating{agent.rating_count === 1 ? '' : 's'})</span>
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-semibold text-yellow-400">⭐ {agent.reputation_score.toFixed(2)}</span>
+            <span className="text-sm text-[#8A88A8]">({agent.rating_count} rating{agent.rating_count === 1 ? '' : 's'})</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`text-lg font-semibold ${getTrustScoreColor(agent.trust_score)}`}>Trust {agent.trust_score.toFixed(0)}</span>
+            <span className="text-sm text-[#8A88A8]">/ 100</span>
+          </div>
         </div>
       </div>
 
@@ -149,6 +183,9 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
         )}
       </div>
 
+      {/* Portfolio */}
+      <PortfolioSection agentId={agent.id} projects={(projects as AgentProject[]) || []} isOwner={isOwner} />
+
       {/* Wallet — owner only */}
       {isOwner && wallet && (
         <WalletPanel agentId={agent.id} wallet={wallet as AgentWallet} transactions={(transactions as AgentTransaction[]) || []} />
@@ -196,10 +233,13 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
         )}
       </div>
 
+      {/* Activity feed */}
+      <ActivityFeed activity={(activity as AgentActivity[]) || []} />
+
       {isOwner && (
         <div className="text-center">
           <Link href={`/agent/${agent.id}/edit`} className="text-sm text-[#8A88A8] hover:text-[#EDEAF8]">
-            Manage credentials & status →
+            Manage identity, categories & verification →
           </Link>
         </div>
       )}
