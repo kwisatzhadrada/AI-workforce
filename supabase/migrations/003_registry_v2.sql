@@ -487,11 +487,20 @@ create policy "follows_delete" on public.follows for delete
 -- ============================================================
 -- 7. FULL-TEXT SEARCH
 -- ============================================================
+-- array_to_string() is catalogued STABLE, not IMMUTABLE (Postgres can't
+-- prove it for the polymorphic anyarray signature), so it can't appear
+-- directly inside a GENERATED ALWAYS AS expression. This thin wrapper is
+-- immutable for the text[] case we actually use it for.
+create or replace function public.immutable_array_to_string(p_arr text[], p_sep text)
+returns text language sql immutable as $$
+  select array_to_string(p_arr, p_sep);
+$$;
+
 alter table public.agents add column if not exists search_vector tsvector
   generated always as (
     setweight(to_tsvector('english', coalesce(name, '')), 'A') ||
     setweight(to_tsvector('english', coalesce(description, '')), 'C') ||
-    setweight(to_tsvector('english', array_to_string(skills, ' ')), 'B')
+    setweight(to_tsvector('english', public.immutable_array_to_string(skills, ' ')), 'B')
   ) stored;
 
 create index if not exists agents_search_vector_idx on public.agents using gin (search_vector);

@@ -36,24 +36,6 @@ insert into public.organization_roles (slug, name, level) values
   ('agent', 'Agent', 3)
 on conflict (slug) do nothing;
 
-create or replace function public.is_org_manager(p_org_id uuid, p_user_id uuid)
-returns boolean language sql security definer stable as $$
-  select
-    exists (select 1 from public.organizations where id = p_org_id and owner_id = p_user_id)
-    or exists (
-      select 1 from public.organization_members m
-      join public.organization_roles r on r.id = m.role_id
-      where m.organization_id = p_org_id and m.user_id = p_user_id and r.level <= 1
-    );
-$$;
-
-create or replace function public.is_org_member(p_org_id uuid, p_user_id uuid)
-returns boolean language sql security definer stable as $$
-  select
-    exists (select 1 from public.organizations where id = p_org_id and owner_id = p_user_id)
-    or exists (select 1 from public.organization_members where organization_id = p_org_id and user_id = p_user_id);
-$$;
-
 -- ============================================================
 -- 3. MEMBERS (Organization -> many Human Owners)
 -- ============================================================
@@ -73,6 +55,27 @@ create index if not exists organization_members_user_id_idx on public.organizati
 drop trigger if exists organization_members_updated_at on public.organization_members;
 create trigger organization_members_updated_at before update on public.organization_members
   for each row execute procedure public.set_updated_at();
+
+-- Role helpers live here (not with the role table above): both need
+-- organization_members to already exist, since SQL-language functions
+-- (unlike plpgsql) are validated against the catalog at CREATE time.
+create or replace function public.is_org_manager(p_org_id uuid, p_user_id uuid)
+returns boolean language sql security definer stable as $$
+  select
+    exists (select 1 from public.organizations where id = p_org_id and owner_id = p_user_id)
+    or exists (
+      select 1 from public.organization_members m
+      join public.organization_roles r on r.id = m.role_id
+      where m.organization_id = p_org_id and m.user_id = p_user_id and r.level <= 1
+    );
+$$;
+
+create or replace function public.is_org_member(p_org_id uuid, p_user_id uuid)
+returns boolean language sql security definer stable as $$
+  select
+    exists (select 1 from public.organizations where id = p_org_id and owner_id = p_user_id)
+    or exists (select 1 from public.organization_members where organization_id = p_org_id and user_id = p_user_id);
+$$;
 
 -- ============================================================
 -- 4. DEPARTMENTS (Organization -> many Departments -> many Agents)

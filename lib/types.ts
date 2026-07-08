@@ -714,3 +714,97 @@ export type TemplateMetrics = {
   goals_completed: number
   goal_completion_rate: number
 }
+
+// ============================================================
+// Simulation, Validation & Autonomy Layer (Phase 8)
+// ============================================================
+export type SimulationRunStatus = 'running' | 'completed' | 'failed'
+
+export type SimulationRun = {
+  id: string
+  status: SimulationRunStatus
+  target_agents: number
+  target_organizations: number
+  target_tasks: number
+  target_goals: number
+  target_workflows: number
+  actual_agents: number
+  actual_organizations: number
+  actual_tasks: number
+  actual_goals: number
+  actual_workflows: number
+  organization_ids: string[]
+  triggered_by: string | null
+  error: string | null
+  started_at: string
+  completed_at: string | null
+  duration_seconds: number | null
+  created_at: string
+}
+
+export type SimulationEvent = {
+  id: string
+  run_id: string
+  event_type: string
+  entity_type: string
+  entity_id: string | null
+  payload: Record<string, unknown>
+  created_at: string
+}
+
+export type SimulationMetric = {
+  id: string
+  run_id: string
+  metric_name: string
+  metric_value: number
+  metadata: Record<string, unknown>
+  created_at: string
+}
+
+export type ReportType = 'daily' | 'weekly'
+
+export type SystemReport = {
+  id: string
+  report_type: ReportType
+  period_start: string
+  period_end: string
+  generated_by: string | null
+  content: {
+    network_health: NetworkHealth
+    autonomy_score: AutonomyScore
+    top_organizations: { organization_id: string; name: string; success_rate: number; tasks_completed: number }[]
+    top_agents: { agent_id: string; name: string; trust_score: number; tasks_completed: number | null }[]
+    problem_areas: {
+      overloaded_agents: number
+      idle_agents: number
+      stuck_goals: number
+      task_assignment_failures: number
+    }
+    optimization_opportunities: string[]
+  }
+  created_at: string
+}
+
+export type NetworkHealth = {
+  active_organizations: number
+  active_agents: number
+  task_throughput_24h: number
+  goal_completion_rate: number
+  avg_runtime_seconds: number
+  failure_rate: number
+}
+
+export type AutonomyScore = {
+  pct_tasks_auto_created: number
+  pct_tasks_auto_completed: number
+  pct_goals_autonomous: number
+  pct_workflows_autonomous: number
+  overall_score: number
+}
+
+export type OverloadedAgent = { agent_id: string; agent_name: string; live_task_count: number; trust_score: number }
+export type IdleAgent = { agent_id: string; agent_name: string; last_active_at: string | null; trust_score: number }
+export type WorkflowDeadlock = { workflow_run_id: string; workflow_id: string; organization_id: string; current_step_order: number; stalled_since: string | null }
+export type StuckGoal = { goal_id: string; organization_id: string; title: string; updated_at: string; is_paused: boolean }
+export type TaskAssignmentFailure = { task_id: string; organization_id: string; title: string; created_at: string }
+export type TrustScoreAnomaly = { agent_id: string; agent_name: string; trust_score: number; recent_failures: number }

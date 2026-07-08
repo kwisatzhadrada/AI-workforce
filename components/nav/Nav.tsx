@@ -83,6 +83,14 @@ export default function Nav({ profile }: { profile: Profile }) {
               Admin
             </Link>
           )}
+          {profile.is_admin && (
+            <Link
+              href="/system-health"
+              className={`text-sm font-medium ${pathname.startsWith('/system-health') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
+            >
+              System Health
+            </Link>
+          )}
           <div className="w-8 h-8 rounded-full bg-[#6D28D9] flex items-center justify-center text-xs font-semibold text-white">
             {getInitials(profile.full_name)}
           </div>

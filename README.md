@@ -1,4 +1,4 @@
-# AI Workforce — Workforce Templates (v7)
+# AI Workforce — Simulation & Autonomy Validation (v8)
 
 Give every AI worker a verifiable, discoverable identity. Built with **Next.js 16 (App Router)**, **TypeScript**, **Tailwind CSS**, and **Supabase** (Auth, Postgres).
 
@@ -95,6 +95,19 @@ The platform stops being infrastructure and starts being deployable AI businesse
 - 📊 **Metrics** (`get_template_metrics()`) — Template Usage (`usage_count`, bumped on every deploy), Deployment Success (from `template_deployments`), Goal Completion Rate (completed vs. total goals traced back to that template's `goal_blueprints`). Deliberately `security definer`: these are meant to be public aggregate stats, not silently scoped down by whatever deployments/goals the browsing user's own RLS happens to make visible to them.
 - 🖥️ **Dashboard** (`/templates`) — browse with live metrics; `/templates/[id]` previews the full structure (every agent with its capabilities, the workflow chain, every goal with its target metrics and manager) before you commit, then deploys with one form.
 
+## Phase 8 — Simulation, Validation & Autonomy Scoring
+
+Validates the network under real operating conditions rather than adding new platform surface: a simulation engine seeds real organizations, agents, goals, and workflows through the *actual* deployment/planning/execution machinery built in Phases 3-7, drives every task to resolution, then measures what actually happened. No mock business data is fabricated — simulated executions are clearly marked (`output->>'simulated'`) and their outcomes are decided by a real probability model derived from each agent's real trust score, not a coin flip independent of the system's own state.
+
+- 🧪 **Simulation engine** (`simulation_runs`, `simulation_events`, `simulation_metrics`) — `start_simulation_run()` deploys real organizations by cycling through the five Phase 7 templates via `deploy_workforce_template()`, activates every workflow (`start_workflow_run()`) and goal (a synthetic single-step plan + `approve_goal_plan()`) the templates leave planless/unstarted by design, tops up agents/goals/workflows/tasks to exact targets when the templates don't multiply out evenly, then resolves every open task through `simulate_task_resolution()` — occasionally simulating a delegation — until the task target is hit or the iteration cap is reached. Every organization/agent/goal/workflow/task the run touches is logged to `simulation_events`; `simulation_runs.organization_ids` scopes "this run's world" without adding a tagging column to any core table.
+- 🎲 **Trust-weighted task resolution** — `simulate_task_resolution()` assigns an unassigned task to a real active agent in its organization, then resolves it via a success probability derived from that agent's actual `trust_score` (`0.5 + (trust_score - 50) / 150`, clamped to [0.4, 0.95]) — a brand-new agent (trust 0) genuinely starts at a pessimistic 40%, same as it would need to for real. It runs through the real `agent_executions` lifecycle and the real `decide_agent_accept_task` / `decide_agent_complete_task` checks, so completions and failures propagate through the exact same reputation/trust/metrics cascades a human-run task would.
+- 📊 **Organization stress metrics** (`compute_run_metrics()`) — per run: task completion rate, task failure rate, workflow completion rate, delegation frequency, average agent utilization, manager decision quality (share of `agent_decisions` with a positive outcome), goal completion rate — stored as rows in `simulation_metrics` rather than one wide table, so new metrics can be added later without a schema change.
+- 🔎 **Bottleneck analysis** (admin-only, platform-wide) — `find_overloaded_agents()` (3+ concurrent tasks), `find_idle_agents()` (active but untouched for 7+ days), `find_workflow_deadlocks()` (current step stalled 1+ hour), `find_stuck_goals()` (active-but-paused or no step progress in 24h), `find_task_assignment_failures()` (unassigned 1+ hour), `find_trust_score_anomalies()` (3+ recent execution failures despite a trust score above 60 — a lagging trust score that hasn't caught up to current behavior yet).
+- 🩺 **Network health dashboard** (`/system-health`, admin-only) — Active Organizations, Active Agents, Task Throughput (24h), Goal Completion Rate, Average Runtime, Failure Rate, all computed live and platform-wide by `get_network_health()`.
+- 🧮 **Autonomy score** (`compute_autonomy_score()`) — 0-100 composite of four honestly-scoped proxies: % tasks auto-created (linked to a workflow step or goal plan step), % completed tasks with a linked successful execution, % goals achieved without intervention (an exact measure here, not a proxy — goals can *only* reach `completed` via the autonomous `monitor_goal_progress()` path; there is no "mark complete" button anywhere in the UI), % completed workflow runs whose every task was completed via a linked successful execution.
+- 📰 **Executive reporting** (`system_reports`, `generate_system_report('daily' | 'weekly')`) — Top Organizations (by success rate), Top Agents (by trust score), Problem Areas (the six bottleneck counts), and Optimization Opportunities (plain-language suggestions derived directly from which bottleneck counts are non-zero — no LLM call, so it's free and fully deterministic).
+- 🖥️ **`/system-health`** — admin-gated the same way `/admin/verifications` is: network health cards, autonomy score, simulation run history, the six bottleneck lists, a "Run Simulation" button, and report generation/viewing.
+
 ## Getting started
 
 ### 1. Install dependencies
@@ -117,6 +130,7 @@ npm install
    - `supabase/migrations/008_goals.sql` — goals, planning engine, task generation, the autonomous manager agent framework, organization state, agent utilization, and a further security-hardening pass
    - `supabase/migrations/009_workforce_templates.sql` — templates, agent/workflow/goal blueprints, the deployment engine, lineage tracking, and metrics
    - `supabase/migrations/010_workforce_template_seeds.sql` — five real system templates (B2B Sales, Customer Support, Research, Content Marketing, Recruiting)
+   - `supabase/migrations/011_simulation.sql` — simulation runs/events/metrics, the seeding/resolution engine, organization stress metrics, bottleneck analysis, network health, autonomy scoring, and executive reporting
 
 ### 3. Configure environment
 
@@ -167,6 +181,12 @@ Open [http://localhost:3000](http://localhost:3000), sign up, then register your
 - **A rolled-back transaction can't log its own failure.** If deployment fails partway, the whole transaction (org included) rolls back — so the app layer catches the RPC error and calls `log_failed_deployment()` as a separate call in a fresh transaction, rather than the deploy function trying to catch-and-log its own failure internally (which would also roll back along with everything else unless carefully isolated — not worth the complexity here).
 - **Goal completion rate is measured per template, not per deployment.** `source_goal_blueprint_id` traces every deployed goal back to the blueprint that spawned it, so the metric aggregates across every organization that ever deployed the template — a more meaningful signal than any single deployment's snapshot.
 - **No marketplace, payments, or public hiring were added in Phase 7**, per scope — this phase composes Phases 1-6's existing primitives into deployable bundles; it introduces no new business-transaction concepts.
+- **This phase was verified against a real local Postgres instance** (a first for this project — every prior phase could only be reasoned about, since no live Supabase project was available). Every migration was applied in order against Postgres 16 with minimal Supabase-parity shims (an `auth.users`/`auth.uid()` stand-in, the `anon`/`authenticated`/`service_role` roles, and the `supabase_realtime` publication all exist for real on any Supabase project), then `start_simulation_run()` was actually executed end-to-end, first at a small scale and then at the exact default targets (100 agents / 20 orgs / 1000 tasks / 100 goals / 50 workflows) — it completed in ~5.3 seconds and hit every target exactly.
+- **That verification pass caught two real, pre-existing bugs that predate Phase 8**, neither of which could have been caught without a real database: (1) migration 003's `agents.search_vector` generated column called `array_to_string()` directly — Postgres catalogs that function `STABLE`, not `IMMUTABLE`, for its polymorphic `anyarray` signature, so `GENERATED ALWAYS AS` rejects it outright; fixed with a thin `public.immutable_array_to_string()` SQL wrapper (safe to mark immutable for the `text[]` case this app actually uses). (2) migration 005 defined `is_org_manager()`/`is_org_member()` (both `language sql`) *before* creating the `organization_members` table they query — SQL-language functions are validated against the catalog at `CREATE FUNCTION` time (unlike `plpgsql`, which mostly defers to runtime), so this failed immediately; fixed by moving the two functions after the table. Both were fixed in place in their original migration files rather than patched forward, since — per the same verification — no live deployment of this schema had ever actually succeeded before now, so there was no live state to preserve.
+- **The simulation surfaced a real cold-start dynamic, not a bug**: freshly created/deployed agents start at `trust_score = 0`, which the existing Phase 2 formula maps to a 40% task success floor — pessimistic for a single task, and it compounds sharply across a multi-step workflow (a 4-step workflow needs four independent rolls to succeed). Small test runs saw most workflow runs fail outright as a result. This is the system honestly reporting that a brand-new AI workforce needs to build a track record, exactly the kind of signal `/system-health` and the bottleneck analysis exist to surface — nothing in Phase 8 was tuned to make the numbers look better.
+- **Deployed templates leave goals and workflows inert on purpose** (Phase 6/7 design: a human decides when to kick off a workflow, and a goal needs a plan a human or the real AI planner authors) — so `start_simulation_run()` explicitly activates every template-deployed goal (a synthetic single-step plan, since there are no LLM credentials in this environment to call the real planner) and workflow before topping up further, otherwise "prove templates can operate autonomously" would silently validate only the topped-up half of the world.
+- **The run is synchronous — still no background worker in this stack.** `start_simulation_run()` executes its entire seed-and-resolve loop inline within one RPC call and one transaction; at the default scale that's low seconds, comfortably inside typical request/statement timeouts, but a much larger target (e.g. the spec's own "100,000 orgs / 10,000,000 agents" future-scale numbers from Phase 3) would need to move to a real job queue rather than one long-lived function call.
+- **No marketplace, payments, or public hiring were added in Phase 8**, per scope — this phase only observes and stress-tests what Phases 1-7 already built.
 
 ## Project structure
 
@@ -205,6 +225,8 @@ app/
     goals/new                   – goal creation
     goals/[id]                  – goal detail: human override, plan creation (manual + AI),
                                    plan/step/dependency visualization, manager decision log
+    system-health                – admin-only: network health, autonomy score, simulation run
+                                   history, bottleneck analysis, run-simulation + report generation
 components/
   nav                           – top nav
   agents                        – directory controls, agent card, badges, follow button,
@@ -220,11 +242,14 @@ components/
                                    plan card, plan step builder, AI plan generation controls,
                                    decision log panel
   templates                     – template card, deploy form, metrics panel
+  system-health                 – run-simulation button, network health/autonomy score panels,
+                                   simulation run list, bottleneck panel, report generation/card
 lib/
   providers                     – ModelProvider abstraction: OpenAI, Anthropic, local/Ollama
   runtime                       – execution orchestration (decision engine -> provider -> tracking),
                                    AI plan generation
-  supabase, types, agents/registry/organizations/tasks/agentRuntime/goals/templates data-access helpers
+  supabase, types, agents/registry/organizations/tasks/agentRuntime/goals/templates/simulation
+                                   data-access helpers
 supabase/migrations             – database schema + RLS + RPCs
 middleware.ts                   – route protection
 ```

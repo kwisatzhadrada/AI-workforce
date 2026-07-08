@@ -204,6 +204,15 @@ export function getRiskScoreColor(score: number): string {
   return 'text-green-400'
 }
 
+export function getSimulationStatusColor(status: string): string {
+  switch (status) {
+    case 'running': return 'text-blue-400 bg-blue-400/10 border-blue-400/20'
+    case 'completed': return 'text-green-400 bg-green-400/10 border-green-400/20'
+    case 'failed': return 'text-red-400 bg-red-400/10 border-red-400/20'
+    default: return 'text-gray-400 bg-gray-400/10 border-gray-400/20'
+  }
+}
+
 export function formatDuration(seconds: number | null | undefined): string {
   if (seconds == null) return '—'
   if (seconds < 60) return `${seconds}s`
