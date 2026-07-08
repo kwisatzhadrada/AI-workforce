@@ -1,4 +1,4 @@
-# AI Workforce — Workforce Intelligence Layer (v9)
+# AI Workforce — B2B Sales Vertical: Real Integrations (v10)
 
 Give every AI worker a verifiable, discoverable identity. Built with **Next.js 16 (App Router)**, **TypeScript**, **Tailwind CSS**, and **Supabase** (Auth, Postgres).
 
@@ -124,6 +124,17 @@ The network learns from its own operation: every table here is derived entirely 
 - 📰 **Executive insights** — Phase 8's `generate_system_report()` is redefined (same table, same signature) to accept `monthly` alongside `daily`/`weekly`, and to add four intelligence-driven content keys — **Top Performers** (`rank_agents`), **Biggest Risks** (the latest burnout/organization-risk prediction per entity), **Growth Opportunities** (agents with an `improving` trend), **Optimization Suggestions** (pending recommendations ranked by confidence) — alongside Phase 8's existing network-health/autonomy-score/problem-areas content, which is untouched.
 - 🖥️ **`/intelligence`** — admin-gated: Agents, Organizations, Workflows, Predictions, Recommendations, Anomalies, and Reports tabs. Recommendations show live Approve/Reject/Apply controls; Predictions and Recommendations both have an organization-scoped "refresh" trigger (no cron in this stack — same manual-button pattern every prior phase uses).
 
+## Phase 10 — B2B Sales Vertical: Real Integrations
+
+Not a new platform layer — this phase makes the existing B2B Sales Team workforce template (Phase 7) produce real business outcomes, by wiring three of its four agents to real external systems instead of a bare LLM call. No new agent, workflow, or intelligence system was introduced; everything routes through the task/workflow/execution machinery Phases 1-9 already built.
+
+- 🔌 **Integrations** (`organization_integrations`) — one row per organization per connected provider, restricted to that organization's managers (credential storage, not public profile data — a deliberate exception to the platform's usual public-professional-network visibility). **Gmail** connects via a real OAuth2 flow (`/api/integrations/gmail/connect` → Google's consent screen → `/api/integrations/gmail/callback`, requiring `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` in `.env`). **HubSpot** and **Hunter.io** connect by pasting a Private App access token / API key — the simpler, equally real integration path both providers actually recommend for a single-account custom integration, with no OAuth consent screen to register.
+- 🔎 **Lead Research Agent** — its capability is now tagged `integration_action = 'prospect_enrich'`. Given target company domains (parsed from the task's title/description), it calls Hunter.io's real Domain Search API and returns real people — name, email, title — at each domain. Company *discovery* from a target-market description (as opposed to enrichment of a domain you already have) needs a paid firmographic API (Apollo, Clearbit Discovery); the `ProspectProvider` interface is built so one drops in behind the same capability later without touching the agent or workflow.
+- 📤 **Outreach Agent** — tagged `email_draft_send`. For every real lead the research step found (read from that step's `tasks.output`, the existing "deliverable" column, not a new data-passing system), it drafts a personalized email with the existing LLM provider abstraction (Phase 5) and actually sends it through the connected Gmail account. Reply detection is on-demand (`checkRepliesForOrganization` / the "Check Replies" button) — Gmail threads are checked for a message after the one sent, matching the "no background worker" pattern every prior phase uses for anything that would otherwise need a poller.
+- 🗂️ **CRM Agent** (formerly "Follow-up Agent" — renamed rather than added as a fifth blueprint, since "keep the CRM current and track responses" was already this role's job) — tagged `crm_upsert`. Creates or updates a real HubSpot contact for every prospect the run touched and logs a real note referencing the actual email sent.
+- 📊 **Measurement** (`sales_activities`) — a plain, append-only event ledger for **Leads Found**, **Emails Sent**, **Replies Received**, and **Meetings Booked** — the same shape as the existing `task_history`/`organization_activity` logs, not a new "intelligence" concept. `get_sales_metrics()` is literal counting over real rows, not a derived score. Meeting booking has no calendar integration yet, so it's a manual "Log a Booked Meeting" action — an honest human-confirmed data point rather than an over-claimed automated one.
+- 🖥️ **Two new tabs on the existing organization dashboard** — Integrations (connect/disconnect, status) and Sales Pipeline (the four metrics, reply rate, activity feed, Check Replies, Log a Booked Meeting). No new page hierarchy; both reuse `OrgTabs`, the same tab pattern every prior phase's dashboard additions used.
+
 ## Getting started
 
 ### 1. Install dependencies
@@ -148,6 +159,7 @@ npm install
    - `supabase/migrations/010_workforce_template_seeds.sql` — five real system templates (B2B Sales, Customer Support, Research, Content Marketing, Recruiting)
    - `supabase/migrations/011_simulation.sql` — simulation runs/events/metrics, the seeding/resolution engine, organization stress metrics, bottleneck analysis, network health, autonomy scoring, and executive reporting
    - `supabase/migrations/012_intelligence.sql` — agent/organization/workflow intelligence, the prediction and recommendation engines, self-optimization (human-approval-required), benchmarking, anomaly detection, and the extended (`daily`/`weekly`/`monthly`) executive report
+   - `supabase/migrations/013_sales_integrations.sql` — integration credential storage, the sales activity ledger + metrics function, `agent_capabilities.integration_action`, and the B2B Sales Team template updates (Prospect Research / Outreach Send / CRM Sync, CRM Agent)
 
 ### 3. Configure environment
 
@@ -209,6 +221,11 @@ Open [http://localhost:3000](http://localhost:3000), sign up, then register your
 - **Every `predict_*` and `agent_review_recommendation` function checks authorization itself**, not just the batch-refresh wrapper that calls them — otherwise an authenticated user could call `predict_organization_risk()` directly via `supabase.rpc()` for an organization they have no relationship to. Each resolves the entity's owning organization and requires `is_admin()` or `is_org_supervisor()` (or, for agent-level predictions, agent ownership) before doing anything.
 - **`organization_health`, `agent_profiles_intelligence`, and `agent_careers` are public**, matching `organization_metrics`' (Phase 3) and the agent table's (Phase 1-2) existing "public professional network" visibility — they're deeper derived views of signals that were already public. `workforce_insights`/`workforce_predictions`/`workforce_recommendations` are admin-only, matching Phase 8's simulation/reporting precedent, since these are operational suggestions and forecasts, not profile data.
 - **No marketplace, payments, crypto, hiring, external clients, or new organization systems were added in Phase 9**, per scope — every table here is derived entirely from data Phases 1-8 already produce, and every recommendation requires a human's explicit approval before `apply_recommendation()` changes anything.
+- **No new agent, workflow, or intelligence system was added in Phase 10** — a capability is executed exactly the same way it always has been (`runAgentExecution()`, Phase 5); the only change is that a capability tagged with an `integration_action` now performs a real HTTP call to a real provider instead of only calling the LLM. Everything else — task creation, workflow step advancement, the decision engine, wallet debits — is unchanged.
+- **Step-to-step data passing reuses `tasks.output`, an existing column, rather than a new mechanism.** The Outreach step reads the real leads the Research step found, and the CRM step reads both the leads and which ones were actually emailed, by looking at every other completed task's `output` in the same `workflow_run_id` — the same "deliverable" column Phase 4 already built tasks around, just populated with real structured data instead of a raw LLM text blob.
+- **HubSpot and Hunter.io connect via a pasted token, not OAuth** — both providers' own current recommendation for a single-account custom integration, and the pragmatic choice given this environment has no live OAuth app registered with either. Gmail *does* use real OAuth2, since Google requires it and a registered `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` is realistic homework for whoever deploys this. An OAuth app for HubSpot would be the natural next step for a multi-account, install-from-marketplace product.
+- **Company *discovery* from a target-market description is out of scope; company *enrichment* from a known domain is what's built.** Hunter.io's real, free-tier Domain Search API turns a domain into real people — it does not turn "Series A fintech SaaS companies" into a list of domains. That needs a paid firmographic API (Apollo, Clearbit Discovery, ZoomInfo). The `ProspectProvider` interface exists precisely so that's a config change later, not a rewrite; today, an operator seeds target domains directly (in the "Research Prospect" task's description), which is exactly how many real SDR workflows already start — from an account list, not a blank industry filter.
+- **This phase's database layer was verified the same way Phases 8-9 were** — every migration applied against a real local Postgres instance, `deploy_workforce_template()` was actually run and its deployed agents' capabilities confirmed correctly tagged with `integration_action`, and every RLS/RPC authorization boundary (`organization_integrations`, `sales_activities`, `connect_integration`, `record_sales_activity`) was exercised as both the legitimate owner and an unrelated `authenticated` user via `SET ROLE`, in both directions. What could **not** be verified here: any actual live call to Gmail, HubSpot, or Hunter.io, since this environment has no real credentials for any of the three — the same honest limitation Phase 5's LLM providers have always carried.
 
 ## Project structure
 
@@ -220,6 +237,9 @@ app/
   api/tasks                     – GET (list, filtered) / POST (create) task API
   api/executions                – GET (list, filtered) / POST (run) execution API
   api/goals/[id]/plan           – POST: draft a plan for a goal via the LLM provider
+  api/integrations/gmail/connect  – GET: redirect into Google's real OAuth2 consent screen
+  api/integrations/gmail/callback – GET: exchange code for tokens, store via connect_integration()
+  api/integrations/check-replies  – POST: on-demand Gmail reply detection for an organization
   (app)/                        – authenticated shell
     templates                    – browse templates with live usage/success/completion metrics
     templates/[id]                – preview (agents, workflow, goals) + deploy form
@@ -233,7 +253,7 @@ app/
     organizations               – organization directory (search by name, pagination)
     organizations/new           – organization creation
     organizations/[id]          – dashboard: Overview / Departments / Agents / Performance /
-                                   Tasks / Workflows / Activity (via ?tab=)
+                                   Tasks / Workflows / Activity / Sales Pipeline / Integrations (via ?tab=)
     tasks                       – work queue: My Tasks / Organization Tasks / Department Tasks,
                                    filtered by status/priority/agent/department
     tasks/new                   – task creation
@@ -271,12 +291,19 @@ components/
   intelligence                  – tabs, agent/organization/workflow intelligence lists, template
                                    rankings, predictions list, recommendation card (approve/reject/
                                    apply), org-scoped refresh/generate controls, anomalies panel
+  sales                          – integrations panel + token connect form + disconnect button,
+                                   sales metrics panel, activity feed, check-replies button,
+                                   log-a-booked-meeting form
 lib/
   providers                     – ModelProvider abstraction: OpenAI, Anthropic, local/Ollama
-  runtime                       – execution orchestration (decision engine -> provider -> tracking),
+  integrations                   – EmailProvider/CrmProvider/ProspectProvider abstraction: Gmail
+                                   (OAuth2 + REST), HubSpot (private app token), Hunter.io (domain search)
+  runtime                       – execution orchestration (decision engine -> provider -> tracking;
+                                   dispatches to a real integration action when a capability is
+                                   tagged for one), sales action handlers, on-demand reply checking,
                                    AI plan generation
   supabase, types, agents/registry/organizations/tasks/agentRuntime/goals/templates/simulation/
-                                   intelligence data-access helpers
+                                   intelligence/sales data-access helpers
 supabase/migrations             – database schema + RLS + RPCs
 middleware.ts                   – route protection
 ```

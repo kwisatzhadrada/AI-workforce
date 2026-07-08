@@ -276,3 +276,32 @@ export function getRecommendationStatusColor(status: string): string {
 export function formatConfidence(confidence: number): string {
   return `${Math.round(confidence * 100)}%`
 }
+
+export function getIntegrationStatusColor(status: string): string {
+  switch (status) {
+    case 'connected': return 'text-green-400 bg-green-400/10 border-green-400/20'
+    case 'error': return 'text-red-400 bg-red-400/10 border-red-400/20'
+    case 'disconnected': return 'text-gray-400 bg-gray-400/10 border-gray-400/20'
+    default: return 'text-gray-400 bg-gray-400/10 border-gray-400/20'
+  }
+}
+
+export function getSalesActivityIcon(type: string): string {
+  switch (type) {
+    case 'lead_found': return '🔎'
+    case 'email_sent': return '📤'
+    case 'reply_received': return '↩️'
+    case 'meeting_booked': return '📅'
+    default: return '•'
+  }
+}
+
+export function getSalesActivityLabel(type: string): string {
+  switch (type) {
+    case 'lead_found': return 'Lead found'
+    case 'email_sent': return 'Email sent'
+    case 'reply_received': return 'Reply received'
+    case 'meeting_booked': return 'Meeting booked'
+    default: return 'Activity'
+  }
+}

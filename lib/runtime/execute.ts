@@ -1,6 +1,8 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { getProvider, ModelProviderName, ProviderConfigError } from '@/lib/providers'
-import { AgentExecution } from '@/lib/types'
+import { IntegrationConfigError } from '@/lib/integrations'
+import { runCrmSync, runEmailOutreach, runProspectEnrichment } from './salesActions'
+import { AgentExecution, IntegrationAction } from '@/lib/types'
 
 export type RunExecutionParams = {
   agentId: string
@@ -33,11 +35,11 @@ export async function runAgentExecution(supabase: SupabaseClient, params: RunExe
     return { execution: null, error: agentError?.message || 'Agent not found' }
   }
 
-  let capability: { id: string; name: string; description: string | null; input_schema: unknown; output_schema: unknown; cost_estimate: number } | null = null
+  let capability: { id: string; name: string; description: string | null; input_schema: unknown; output_schema: unknown; cost_estimate: number; integration_action: IntegrationAction | null } | null = null
   if (capabilityId) {
     const { data } = await supabase
       .from('agent_capabilities')
-      .select('id, name, description, input_schema, output_schema, cost_estimate')
+      .select('id, name, description, input_schema, output_schema, cost_estimate, integration_action')
       .eq('id', capabilityId)
       .maybeSingle()
     capability = data
@@ -100,25 +102,59 @@ export async function runAgentExecution(supabase: SupabaseClient, params: RunExe
 
   await supabase.from('agent_executions').update({ status: 'running', started_at: new Date().toISOString() }).eq('id', queued.id)
 
-  const systemPrompt = buildSystemPrompt(agent.name, capability)
-  const userPrompt = buildUserPrompt(input, taskId)
-
   try {
-    const provider = getProvider(providerName)
-    const response = await provider.generate({ systemPrompt, userPrompt })
+    let executionOutput: Record<string, unknown>
+    let taskOutput: Record<string, unknown> | null = null
+    let model: string | null = null
+    let tokensUsed: number | null = null
+
+    if (capability?.integration_action) {
+      // Real work: the capability is wired to an actual integration
+      // action rather than a bare LLM call — see lib/runtime/salesActions.ts.
+      if (!taskId) {
+        throw new Error(`${capability.name} requires a task (real prospect/email/CRM context comes from the task)`)
+      }
+      const { data: task } = await supabase.from('tasks').select('organization_id').eq('id', taskId).maybeSingle()
+      if (!task?.organization_id) {
+        throw new Error('Task not found or has no organization')
+      }
+
+      const result = await dispatchIntegrationAction(supabase, capability.integration_action, {
+        organizationId: task.organization_id,
+        agentId,
+        agentName: agent.name,
+        taskId,
+        input,
+        llmProvider: providerName,
+      })
+      executionOutput = result.output
+      taskOutput = result.taskOutput
+    } else {
+      const systemPrompt = buildSystemPrompt(agent.name, capability)
+      const userPrompt = buildUserPrompt(input, taskId)
+      const provider = getProvider(providerName)
+      const response = await provider.generate({ systemPrompt, userPrompt })
+      executionOutput = { result: response.output }
+      model = response.model
+      tokensUsed = response.tokensUsed
+    }
 
     const { data: completed } = await supabase
       .from('agent_executions')
       .update({
         status: 'completed',
         completed_at: new Date().toISOString(),
-        output: { result: response.output },
-        model: response.model,
-        tokens_used: response.tokensUsed,
+        output: executionOutput,
+        model,
+        tokens_used: tokensUsed,
       })
       .eq('id', queued.id)
       .select('*')
       .single()
+
+    if (taskOutput && taskId) {
+      await supabase.from('tasks').update({ output: taskOutput }).eq('id', taskId)
+    }
 
     await supabase.rpc('decide_agent_complete_task', { p_agent_id: agentId, p_task_id: taskId, p_execution_id: queued.id })
 
@@ -137,7 +173,7 @@ export async function runAgentExecution(supabase: SupabaseClient, params: RunExe
 
     return { execution: (completed as AgentExecution) || null, error: null }
   } catch (err) {
-    const message = err instanceof ProviderConfigError ? err.message : err instanceof Error ? err.message : 'Execution failed'
+    const message = err instanceof ProviderConfigError || err instanceof IntegrationConfigError ? err.message : err instanceof Error ? err.message : 'Execution failed'
 
     const { data: failed } = await supabase
       .from('agent_executions')
@@ -149,6 +185,21 @@ export async function runAgentExecution(supabase: SupabaseClient, params: RunExe
     await supabase.rpc('decide_request_assistance', { p_agent_id: agentId, p_task_id: taskId, p_execution_id: queued.id })
 
     return { execution: (failed as AgentExecution) || null, error: null }
+  }
+}
+
+async function dispatchIntegrationAction(
+  supabase: SupabaseClient,
+  action: IntegrationAction,
+  params: { organizationId: string; agentId: string; agentName: string; taskId: string; input: Record<string, unknown>; llmProvider: ModelProviderName }
+): Promise<{ output: Record<string, unknown>; taskOutput: Record<string, unknown> }> {
+  switch (action) {
+    case 'prospect_enrich':
+      return runProspectEnrichment(supabase, params)
+    case 'email_draft_send':
+      return runEmailOutreach(supabase, params)
+    case 'crm_upsert':
+      return runCrmSync(supabase, params)
   }
 }
 

@@ -420,6 +420,8 @@ export type TaskHistoryEvent = {
 // Agent Runtime Layer (Phase 5)
 // ============================================================
 
+export type IntegrationAction = 'prospect_enrich' | 'email_draft_send' | 'crm_upsert'
+
 export type AgentCapability = {
   id: string
   agent_id: string
@@ -429,6 +431,7 @@ export type AgentCapability = {
   output_schema: Record<string, unknown>
   cost_estimate: number
   enabled: boolean
+  integration_action: IntegrationAction | null
   created_at: string
   updated_at: string
 }
@@ -934,4 +937,46 @@ export type AnomalyReport = {
   delegation_loops: DelegationLoop[]
   workflow_deadlocks: WorkflowDeadlock[]
   underperforming_organizations: UnderperformingOrganization[]
+}
+
+// ============================================================
+// B2B Sales Vertical: Real Integrations (Phase 10)
+// ============================================================
+export type IntegrationProvider = 'gmail' | 'hubspot' | 'hunter'
+export type IntegrationStatus = 'connected' | 'disconnected' | 'error'
+
+export type OrganizationIntegration = {
+  id: string
+  organization_id: string
+  provider: IntegrationProvider
+  status: IntegrationStatus
+  connected_by: string | null
+  connected_at: string
+  last_synced_at: string | null
+  last_error: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type SalesActivityType = 'lead_found' | 'email_sent' | 'reply_received' | 'meeting_booked'
+
+export type SalesActivity = {
+  id: string
+  organization_id: string
+  activity_type: SalesActivityType
+  agent_id: string | null
+  task_id: string | null
+  contact_email: string | null
+  contact_name: string | null
+  contact_company: string | null
+  metadata: Record<string, unknown>
+  created_at: string
+}
+
+export type SalesMetrics = {
+  leads_found: number
+  emails_sent: number
+  replies_received: number
+  meetings_booked: number
+  reply_rate: number
 }

@@ -8,6 +8,8 @@ const TABS = [
   { value: 'tasks', label: 'Tasks' },
   { value: 'workflows', label: 'Workflows' },
   { value: 'activity', label: 'Activity' },
+  { value: 'sales', label: 'Sales Pipeline' },
+  { value: 'integrations', label: 'Integrations' },
 ] as const
 
 export default function OrgTabs({ orgId, active }: { orgId: string; active: string }) {

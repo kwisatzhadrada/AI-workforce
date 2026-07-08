@@ -16,10 +16,16 @@ import CreateWorkflowForm from '@/components/organizations/CreateWorkflowForm'
 import WorkflowCard from '@/components/organizations/WorkflowCard'
 import WorkflowRunsList from '@/components/organizations/WorkflowRunsList'
 import TaskDashboardPanel from '@/components/organizations/TaskDashboardPanel'
+import IntegrationsPanel from '@/components/sales/IntegrationsPanel'
+import SalesMetricsPanel from '@/components/sales/SalesMetricsPanel'
+import SalesActivityFeed from '@/components/sales/SalesActivityFeed'
+import CheckRepliesButton from '@/components/sales/CheckRepliesButton'
+import MarkMeetingBookedForm from '@/components/sales/MarkMeetingBookedForm'
+import { getOrganizationIntegrations, getSalesActivity, getSalesMetrics } from '@/lib/sales'
 
 export const dynamic = 'force-dynamic'
 
-const VALID_TABS = ['overview', 'departments', 'agents', 'performance', 'tasks', 'workflows', 'activity'] as const
+const VALID_TABS = ['overview', 'departments', 'agents', 'performance', 'tasks', 'workflows', 'activity', 'sales', 'integrations'] as const
 type Tab = (typeof VALID_TABS)[number]
 
 export default async function OrganizationPage({
@@ -86,6 +92,8 @@ export default async function OrganizationPage({
       {tab === 'tasks' && <TasksTab organizationId={id} />}
       {tab === 'workflows' && <WorkflowsTab organizationId={id} currentUserId={user.id} isManager={!!isManager} />}
       {tab === 'activity' && <ActivityTab organizationId={id} />}
+      {tab === 'sales' && <SalesTab organizationId={id} />}
+      {tab === 'integrations' && <IntegrationsTab organizationId={id} isManager={!!isManager} error={Array.isArray(sp.error) ? sp.error[0] : sp.error} />}
     </div>
   )
 }
@@ -326,4 +334,31 @@ async function ActivityTab({ organizationId }: { organizationId: string }) {
     .limit(50)
 
   return <OrgActivityFeed activity={(activity as OrganizationActivity[]) || []} />
+}
+
+async function SalesTab({ organizationId }: { organizationId: string }) {
+  const supabase = await createClient()
+  const [metrics, activity] = await Promise.all([
+    getSalesMetrics(supabase, organizationId),
+    getSalesActivity(supabase, organizationId, 50),
+  ])
+
+  return (
+    <div className="space-y-6">
+      <SalesMetricsPanel metrics={metrics} />
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="font-['Space_Grotesk'] font-bold text-lg">Activity</h2>
+        <CheckRepliesButton organizationId={organizationId} />
+      </div>
+      <SalesActivityFeed activity={activity} />
+      <MarkMeetingBookedForm organizationId={organizationId} />
+    </div>
+  )
+}
+
+async function IntegrationsTab({ organizationId, isManager, error }: { organizationId: string; isManager: boolean; error?: string }) {
+  const supabase = await createClient()
+  const integrations = await getOrganizationIntegrations(supabase, organizationId)
+
+  return <IntegrationsPanel organizationId={organizationId} integrations={integrations} isManager={isManager} error={error} />
 }
