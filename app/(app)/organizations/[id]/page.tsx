@@ -22,10 +22,12 @@ import SalesActivityFeed from '@/components/sales/SalesActivityFeed'
 import CheckRepliesButton from '@/components/sales/CheckRepliesButton'
 import MarkMeetingBookedForm from '@/components/sales/MarkMeetingBookedForm'
 import { getOrganizationIntegrations, getSalesActivity, getSalesMetrics } from '@/lib/sales'
+import SetupWizardPanel from '@/components/sales/SetupWizardPanel'
+import { getSetupWizardState } from '@/lib/setupWizard'
 
 export const dynamic = 'force-dynamic'
 
-const VALID_TABS = ['overview', 'departments', 'agents', 'performance', 'tasks', 'workflows', 'activity', 'sales', 'integrations'] as const
+const VALID_TABS = ['overview', 'departments', 'agents', 'performance', 'tasks', 'workflows', 'activity', 'sales', 'integrations', 'setup'] as const
 type Tab = (typeof VALID_TABS)[number]
 
 export default async function OrganizationPage({
@@ -94,6 +96,7 @@ export default async function OrganizationPage({
       {tab === 'activity' && <ActivityTab organizationId={id} />}
       {tab === 'sales' && <SalesTab organizationId={id} />}
       {tab === 'integrations' && <IntegrationsTab organizationId={id} isManager={!!isManager} error={Array.isArray(sp.error) ? sp.error[0] : sp.error} />}
+      {tab === 'setup' && <SetupWizardTab organizationId={id} />}
     </div>
   )
 }
@@ -361,4 +364,11 @@ async function IntegrationsTab({ organizationId, isManager, error }: { organizat
   const integrations = await getOrganizationIntegrations(supabase, organizationId)
 
   return <IntegrationsPanel organizationId={organizationId} integrations={integrations} isManager={isManager} error={error} />
+}
+
+async function SetupWizardTab({ organizationId }: { organizationId: string }) {
+  const supabase = await createClient()
+  const state = await getSetupWizardState(supabase, organizationId)
+
+  return <SetupWizardPanel state={state} />
 }
