@@ -101,6 +101,12 @@ async function OverviewTab({ organizationId, metrics }: { organizationId: string
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+        <Link href={`/goals?org_id=${organizationId}`} className="text-sm text-[#8B5CF6] hover:text-[#6D28D9]">
+          🎯 View Goals →
+        </Link>
+      </div>
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Stat label="Members" value={memberCount || 0} />
         <Stat label="Departments" value={departmentCount || 0} />

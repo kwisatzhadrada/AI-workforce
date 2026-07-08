@@ -46,6 +46,12 @@ export default function Nav({ profile }: { profile: Profile }) {
             Organizations
           </Link>
           <Link
+            href="/goals"
+            className={`text-sm font-medium ${pathname.startsWith('/goals') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
+          >
+            Goals
+          </Link>
+          <Link
             href="/tasks"
             className={`text-sm font-medium ${pathname.startsWith('/tasks') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
           >

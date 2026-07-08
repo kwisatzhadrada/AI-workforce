@@ -281,6 +281,7 @@ export type OrganizationActivityType =
   | 'member_joined' | 'member_removed' | 'agent_joined' | 'agent_removed'
   | 'department_created' | 'verification_earned' | 'trust_score_changed'
   | 'assignment_completed' | 'workflow_completed'
+  | 'goal_created' | 'goal_completed' | 'goal_failed' | 'plan_approved'
 
 export type OrganizationActivity = {
   id: string
@@ -464,7 +465,9 @@ export type AgentExecution = {
   agent_capabilities?: Pick<AgentCapability, 'id' | 'name'>
 }
 
-export type DecisionType = 'accept_task' | 'complete_task' | 'request_assistance' | 'delegate'
+export type DecisionType =
+  | 'accept_task' | 'complete_task' | 'request_assistance' | 'delegate'
+  | 'create_task' | 'assign_task' | 'monitor_progress' | 'escalate_failure'
 
 export type AgentDecision = {
   id: string
@@ -474,6 +477,8 @@ export type AgentDecision = {
   decision_type: DecisionType
   outcome: 'yes' | 'no'
   reasoning: string
+  inputs: Record<string, unknown>
+  outputs: Record<string, unknown>
   metadata: Record<string, unknown>
   created_at: string
 }
@@ -534,4 +539,78 @@ export type Delegation = {
   from_agent?: Pick<Agent, 'id' | 'name' | 'avatar_url'>
   to_agent?: Pick<Agent, 'id' | 'name' | 'avatar_url'>
   tasks?: Pick<Task, 'id' | 'title'>
+}
+
+// ============================================================
+// Autonomous Organization Layer (Phase 6)
+// ============================================================
+
+export type GoalStatus = 'draft' | 'active' | 'completed' | 'failed'
+
+export type OrganizationGoal = {
+  id: string
+  organization_id: string
+  title: string
+  description: string | null
+  priority: TaskPriority
+  status: GoalStatus
+  is_paused: boolean
+  target_metrics: Record<string, unknown>
+  deadline: string | null
+  manager_agent_id: string | null
+  created_by: string
+  created_at: string
+  updated_at: string
+  agents?: Pick<Agent, 'id' | 'name' | 'avatar_url'>
+}
+
+export type PlanStatus = 'draft' | 'approved' | 'rejected' | 'completed'
+
+export type GoalPlan = {
+  id: string
+  goal_id: string
+  status: PlanStatus
+  generated_by: 'human' | 'ai'
+  created_by: string | null
+  approved_by: string | null
+  approved_at: string | null
+  created_at: string
+  updated_at: string
+  goal_plan_steps?: GoalPlanStep[]
+}
+
+export type PlanStepStatus = 'pending' | 'in_progress' | 'completed' | 'failed'
+
+export type GoalPlanStep = {
+  id: string
+  plan_id: string
+  step_order: number
+  title: string
+  description: string | null
+  department_id: string | null
+  estimated_effort_hours: number | null
+  status: PlanStepStatus
+  task_id: string | null
+  created_at: string
+  updated_at: string
+  organization_departments?: Pick<OrganizationDepartment, 'id' | 'name'>
+  depends_on?: string[]
+}
+
+export type OrganizationState = {
+  organization_id: string
+  active_goals: number
+  blocked_goals: number
+  resource_utilization: number
+  agent_utilization: number
+  risk_score: number
+  updated_at: string
+}
+
+export type AgentUtilization = {
+  agent_id: string
+  idle_seconds: number | null
+  active_seconds: number
+  task_volume: number
+  success_rate: number
 }

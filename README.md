@@ -1,4 +1,4 @@
-# AI Workforce — Agent Runtime Layer (v5)
+# AI Workforce — Autonomous Organization Layer (v6)
 
 Give every AI worker a verifiable, discoverable identity. Built with **Next.js 16 (App Router)**, **TypeScript**, **Tailwind CSS**, and **Supabase** (Auth, Postgres).
 
@@ -68,6 +68,20 @@ Agents become active workers instead of static records. No marketplace, no payme
 - 🔍 **Observability** — `agent_executions` is the execution log, `agent_error_logs` is a dedicated error log (auto-populated whenever an execution fails), and `agent_decisions` is the decision log — together with Phases 2-4's activity/history tables, every runtime action is auditable somewhere.
 - 🔒 **Security hardening** — closed a gap that applied retroactively to Phases 2-4: several `security definer` helper functions (`apply_task_completion_metrics`, `create_task_for_workflow_step`, `advance_workflow_run_core`, the various `log_*`/`recompute_*` functions, and this phase's `apply_execution_cost`) had no internal ownership check and were directly callable by any authenticated user via `supabase.rpc()`, since Postgres grants `EXECUTE` to `PUBLIC` by default. Migration 007 revokes that grant from `public`/`anon`/`authenticated` on every such function; they keep working from inside other security-definer triggers (which run as their owner regardless of grants) but are no longer directly reachable.
 
+## Phase 6 — Autonomous Organization Layer
+
+Organizations operate from goals, not tasks: goal → plan → tasks, driven by a manager agent whose every action is logged, with humans able to approve, reject, pause, or modify at every step.
+
+- 🎯 **Goals** (`organization_goals`) — title, description, priority, status (Draft → Active → Completed/Failed), `target_metrics` (jsonb), deadline, and a `manager_agent_id` — the agent that autonomously drives this goal. `is_paused` is a separate flag from `status` (matching the spec's exact 4-state enum) so a goal can be "Active" yet on hold.
+- 🗺️ **Planning engine** (`goal_plans` → `goal_plan_steps` → `goal_plan_step_dependencies`) — a goal can have multiple plans (draft/approved/rejected/completed); each plan is an ordered set of steps with an explicit dependency graph (not assumed-linear — a step can wait on more than one predecessor), a department, and an estimated effort. Plans can be authored manually or **drafted by the LLM** (reusing Phase 5's provider abstraction: `generateGoalPlan()` asks the model for strict JSON, parses it, and inserts it as a review-only draft) — either way, nothing runs until a human approves it.
+- ⚙️ **Task generation** — approving a plan (`approve_goal_plan`) immediately materializes tasks for every step with no unmet dependencies, via the same `tasks` table Phase 4 built (`tasks.goal_plan_step_id` links them back). As linked tasks complete or fail, a reactive trigger advances the plan automatically — completing one step's task can make the next step's task get created and assigned without another click.
+- 🤖 **Autonomous manager agent** — `run_goal_manager_cycle()` is the manager agent's operating loop: create tasks for ready steps, assign the best available agent (ranked by trust score and utilization, gated by the same `decide_agent_accept_task` check Phase 5 built), monitor plan/goal completion, and escalate failed steps as an `agent_message` alert to the organization. It runs reactively (whenever a linked task completes/fails) and can also be re-triggered manually from the goal page. Every single action — accepted or declined — is written to `agent_decisions` via one shared `log_decision()` function, now carrying explicit `inputs`/`outputs` columns in addition to Phase 5's `reasoning`/`outcome`.
+- 📊 **Organization state** (`organization_state`) — active goals, blocked (paused) goals, resource utilization (active tasks vs. theoretical agent capacity), agent utilization (share of assigned agents currently working), and a composite risk score (overdue goals, recent task failure rate, average assigned-agent trust). Recomputed on every goal or task-status change.
+- ⏱️ **Agent utilization** (`agent_utilization` + `get_agent_utilization()`) — deliberately lean: only cumulative active time is stored here; task volume and success rate already live on Phase 1's `agent_performance_metrics` and idle time is derived live from `last_active_at` rather than stored (it grows continuously and would go stale). The manager agent's assignment logic reads this when ranking candidates.
+- 🕹️ **Human override** — approve/reject a plan (manager-only RPCs), pause/resume a goal, edit a goal's title/description/priority/manager agent, or mark it failed outright — all exposed on `/goals/[id]`.
+- 📋 **Dashboard** (`/goals`) — organization picker, `organization_state` summary, goal cards with status/priority/deadline; `/goals/[id]` for plan visualization (steps, dependencies, status, linked tasks), progress, and the manager agent's full decision log.
+- 🔮 **Success metrics stay honest**: target metrics are shown as declared, and plan-step completion is shown as a progress proxy — this phase does not fabricate a "% of 100 leads generated" number, since nothing here yet reads business outcomes back out of task output. That would be a real, separate integration, not something to fake.
+
 ## Getting started
 
 ### 1. Install dependencies
@@ -87,6 +101,7 @@ npm install
    - `supabase/migrations/005_organizations.sql` — organization expansion, member/role hierarchy, departments, agent assignments, metrics, activity graph, and the workflow engine
    - `supabase/migrations/006_tasks.sql` — tasks, task history, task reviews, and the workflow↔task integration
    - `supabase/migrations/007_agent_runtime.sql` — capabilities, executions, decision engine, memory, communication, delegation, and a security-hardening pass on earlier phases' internal functions
+   - `supabase/migrations/008_goals.sql` — goals, planning engine, task generation, the autonomous manager agent framework, organization state, agent utilization, and a further security-hardening pass
 
 ### 3. Configure environment
 
@@ -128,6 +143,11 @@ Open [http://localhost:3000](http://localhost:3000), sign up, then register your
 - **Decision engine is rules-based, not LLM-based.** `decide_agent_accept_task` / `decide_agent_complete_task` / `decide_request_assistance` / `decide_delegate_task` are deterministic SQL functions (capacity, capability match, wallet balance, trust score, recent failure rate) rather than a model call asked to "decide." That keeps every decision explainable and free, and it's a legitimate policy layer — an LLM-based version could sit in front of it later without changing the audit trail shape.
 - **Execution cost is a flat per-capability estimate, debited on completion** via `agent_wallet_transaction` (Phase 1's owner-authorized RPC — the runtime always executes as the agent's owner, since that's who Phase 1's `agent_executions` RLS requires to trigger a run). It is not derived from actual token usage; wiring in provider-specific per-token pricing is a natural follow-up.
 - **No marketplace, payments beyond the existing wallet, or public hiring were added in Phase 5**, per scope.
+- **Planning is LLM-drafted, not LLM-executed.** `generateGoalPlan()` is the only place in Phase 6 that calls a model, and its only output is a `draft` plan row — the manager agent's actual operating loop (`run_goal_manager_cycle`) is deterministic SQL, same as Phase 5's decision engine. A human still has to approve before anything is created or assigned.
+- **The manager cycle is both reactive and on-demand**, deliberately mirroring Phase 4's workflow-advance pattern: a trigger re-runs it automatically whenever a plan-linked task completes or fails (wrapped so a cycle error never blocks the task's own update), and a "Run Manager Cycle" button calls the same function on demand for a manual nudge — there's still no background worker in this stack.
+- **A goal's manager agent is required, not optional, for autonomy.** You can create a goal and even a plan without one, but `run_goal_manager_cycle`/`approve_goal_plan` raise a clear error if no `manager_agent_id` is set — the spec frames this as *an agent's* behavior, so the schema doesn't let the cycle run without one attributed.
+- **`agent_utilization` avoids duplicating Phase 1/4 data.** Task volume and success rate already live on `agent_performance_metrics`; this table adds only the new cumulative-active-time signal, and idle time is computed live from `last_active_at` at read time rather than stored (a stored idle counter would grow stale between writes).
+- **No marketplace, public hiring, or new payment mechanisms were added in Phase 6**, per scope — the manager agent's wallet interactions are unchanged from Phase 5.
 
 ## Project structure
 
@@ -138,6 +158,7 @@ app/
   api/agents/search              – GET search/filter/sort/paginate endpoint
   api/tasks                     – GET (list, filtered) / POST (create) task API
   api/executions                – GET (list, filtered) / POST (run) execution API
+  api/goals/[id]/plan           – POST: draft a plan for a goal via the LLM provider
   (app)/                        – authenticated shell
     agents                      – global directory: search, filters, sort, pagination
     agents/new                  – agent registration
@@ -158,6 +179,11 @@ app/
     executions                  – dashboard: My Agents / Organization views, utilization metrics
     executions/[id]             – execution detail: input/output, decision log, error logs
     messages                    – inbox for agent → manager / agent → organization messages
+    goals                       – dashboard: organization picker, organization_state summary,
+                                   goal cards
+    goals/new                   – goal creation
+    goals/[id]                  – goal detail: human override, plan creation (manual + AI),
+                                   plan/step/dependency visualization, manager decision log
 components/
   nav                           – top nav
   agents                        – directory controls, agent card, badges, follow button,
@@ -169,10 +195,14 @@ components/
                                    history timeline, agent assignment control, runtime execution
                                    panel, delegation panel, execution row/view controls
   messages                      – message row (inbox item, mark-as-read)
+  goals                         – goal card, queue controls, org-state panel, override controls,
+                                   plan card, plan step builder, AI plan generation controls,
+                                   decision log panel
 lib/
   providers                     – ModelProvider abstraction: OpenAI, Anthropic, local/Ollama
-  runtime                       – execution orchestration (decision engine -> provider -> tracking)
-  supabase, types, agents/registry/organizations/tasks/agentRuntime data-access helpers
+  runtime                       – execution orchestration (decision engine -> provider -> tracking),
+                                   AI plan generation
+  supabase, types, agents/registry/organizations/tasks/agentRuntime/goals data-access helpers
 supabase/migrations             – database schema + RLS + RPCs
 middleware.ts                   – route protection
 ```

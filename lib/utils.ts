@@ -108,6 +108,10 @@ export function getOrgActivityIcon(type: string): string {
     case 'trust_score_changed': return '📈'
     case 'assignment_completed': return '✔️'
     case 'workflow_completed': return '🔁'
+    case 'goal_created': return '🎯'
+    case 'goal_completed': return '🏁'
+    case 'goal_failed': return '⚠️'
+    case 'plan_approved': return '📋'
     default: return '•'
   }
 }
@@ -128,6 +132,10 @@ export function getOrgActivityLabel(type: string, payload: Record<string, unknow
     }
     case 'assignment_completed': return 'An assignment was completed'
     case 'workflow_completed': return 'A workflow run completed'
+    case 'goal_created': return `Goal "${payload.title ?? ''}" was created`
+    case 'goal_completed': return `Goal "${payload.title ?? ''}" was completed`
+    case 'goal_failed': return `Goal "${payload.title ?? ''}" failed`
+    case 'plan_approved': return 'A goal plan was approved'
     default: return 'Activity'
   }
 }
@@ -168,6 +176,32 @@ export function getExecutionStatusColor(status: string): string {
 
 export function getDecisionOutcomeColor(outcome: string): string {
   return outcome === 'yes' ? 'text-green-400 bg-green-400/10 border-green-400/20' : 'text-red-400 bg-red-400/10 border-red-400/20'
+}
+
+export function getGoalStatusColor(status: string): string {
+  switch (status) {
+    case 'draft': return 'text-gray-400 bg-gray-400/10 border-gray-400/20'
+    case 'active': return 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20'
+    case 'completed': return 'text-green-400 bg-green-400/10 border-green-400/20'
+    case 'failed': return 'text-red-400 bg-red-400/10 border-red-400/20'
+    default: return 'text-gray-400 bg-gray-400/10 border-gray-400/20'
+  }
+}
+
+export function getPlanStatusColor(status: string): string {
+  switch (status) {
+    case 'draft': return 'text-gray-400 bg-gray-400/10 border-gray-400/20'
+    case 'approved': return 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20'
+    case 'rejected': return 'text-red-400 bg-red-400/10 border-red-400/20'
+    case 'completed': return 'text-green-400 bg-green-400/10 border-green-400/20'
+    default: return 'text-gray-400 bg-gray-400/10 border-gray-400/20'
+  }
+}
+
+export function getRiskScoreColor(score: number): string {
+  if (score >= 66) return 'text-red-400'
+  if (score >= 33) return 'text-yellow-400'
+  return 'text-green-400'
 }
 
 export function formatDuration(seconds: number | null | undefined): string {
