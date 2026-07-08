@@ -55,11 +55,61 @@ export default function ReportCard({ report }: { report: SystemReport }) {
       )}
 
       {content.optimization_opportunities?.length > 0 && (
-        <div>
+        <div className="mb-3">
           <div className="text-xs text-[#8A88A8] mb-1">Optimization Opportunities</div>
           <ul className="list-disc list-inside space-y-1">
             {content.optimization_opportunities.map((o, i) => (
               <li key={i} className="text-xs text-[#EDEAF8]">{o}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {content.top_performers?.length > 0 && (
+        <div className="mb-3">
+          <div className="text-xs text-[#8A88A8] mb-1">Top Performers</div>
+          <div className="space-y-1">
+            {content.top_performers.map((a) => (
+              <div key={a.agent_id} className="flex justify-between text-xs">
+                <span className="text-[#EDEAF8]">{a.name}</span>
+                <span className="text-[#8A88A8]">career score {a.career_score.toFixed(0)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {content.biggest_risks?.length > 0 && (
+        <div className="mb-3">
+          <div className="text-xs text-[#8A88A8] mb-1">Biggest Risks</div>
+          <div className="space-y-1">
+            {content.biggest_risks.map((r, i) => (
+              <div key={i} className="flex justify-between text-xs">
+                <span className="text-[#EDEAF8] capitalize">{r.entity_type} · {r.prediction_type.replace(/_/g, ' ')}</span>
+                <span className="text-red-400">{r.predicted_value.toFixed(0)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {content.growth_opportunities?.length > 0 && (
+        <div className="mb-3">
+          <div className="text-xs text-[#8A88A8] mb-1">Growth Opportunities</div>
+          <div className="space-y-1">
+            {content.growth_opportunities.map((a) => (
+              <div key={a.agent_id} className="text-xs text-[#EDEAF8]">📈 {a.name}{a.specializations?.length > 0 ? ` — ${a.specializations.join(', ')}` : ''}</div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {content.optimization_suggestions?.length > 0 && (
+        <div>
+          <div className="text-xs text-[#8A88A8] mb-1">Optimization Suggestions</div>
+          <ul className="list-disc list-inside space-y-1">
+            {content.optimization_suggestions.map((s, i) => (
+              <li key={i} className="text-xs text-[#EDEAF8]">{s.title} — {s.reason}</li>
             ))}
           </ul>
         </div>

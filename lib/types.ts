@@ -761,7 +761,7 @@ export type SimulationMetric = {
   created_at: string
 }
 
-export type ReportType = 'daily' | 'weekly'
+export type ReportType = 'daily' | 'weekly' | 'monthly'
 
 export type SystemReport = {
   id: string
@@ -781,6 +781,10 @@ export type SystemReport = {
       task_assignment_failures: number
     }
     optimization_opportunities: string[]
+    top_performers: RankedAgent[]
+    biggest_risks: { entity_type: string; entity_id: string; prediction_type: PredictionType; predicted_value: number; confidence: number }[]
+    growth_opportunities: { agent_id: string; name: string; growth_trend: GrowthTrend; specializations: string[] }[]
+    optimization_suggestions: { recommendation_type: RecommendationType; entity_type: string; entity_id: string; title: string; reason: string; expected_impact: string; confidence_score: number }[]
   }
   created_at: string
 }
@@ -808,3 +812,126 @@ export type WorkflowDeadlock = { workflow_run_id: string; workflow_id: string; o
 export type StuckGoal = { goal_id: string; organization_id: string; title: string; updated_at: string; is_paused: boolean }
 export type TaskAssignmentFailure = { task_id: string; organization_id: string; title: string; created_at: string }
 export type TrustScoreAnomaly = { agent_id: string; agent_name: string; trust_score: number; recent_failures: number }
+
+// ============================================================
+// Workforce Intelligence Layer (Phase 9)
+// ============================================================
+export type InsightEntityType = 'agent' | 'organization' | 'workflow' | 'template' | 'platform'
+
+export type WorkforceInsight = {
+  id: string
+  insight_type: string
+  entity_type: InsightEntityType
+  entity_id: string | null
+  title: string
+  detail: string | null
+  metrics: Record<string, unknown>
+  created_at: string
+}
+
+export type PredictionType = 'task_success_probability' | 'goal_success_probability' | 'workflow_failure_probability' | 'agent_burnout_risk' | 'organization_risk_score'
+export type PredictionEntityType = 'task' | 'goal' | 'workflow' | 'agent' | 'organization'
+
+export type WorkforcePrediction = {
+  id: string
+  prediction_type: PredictionType
+  entity_type: PredictionEntityType
+  entity_id: string
+  predicted_value: number
+  confidence: number
+  metadata: Record<string, unknown>
+  created_at: string
+}
+
+export type RecommendationType = 'reassign_agent' | 'add_agent' | 'replace_workflow_step' | 'rebalance_load'
+export type RecommendationEntityType = 'agent' | 'organization' | 'workflow' | 'workflow_step' | 'department'
+export type RecommendationStatus = 'pending' | 'approved' | 'rejected' | 'applied'
+
+export type WorkforceRecommendation = {
+  id: string
+  recommendation_type: RecommendationType
+  entity_type: RecommendationEntityType
+  entity_id: string
+  title: string
+  reason: string
+  expected_impact: string
+  confidence_score: number
+  status: RecommendationStatus
+  metadata: Record<string, unknown> & { organization_id?: string }
+  reviewed_by: string | null
+  reviewed_at: string | null
+  applied_at: string | null
+  created_at: string
+}
+
+export type GrowthTrend = 'improving' | 'declining' | 'stable' | 'insufficient_data'
+
+export type AgentProfileIntelligence = {
+  agent_id: string
+  strengths: string[]
+  weaknesses: string[]
+  specializations: string[]
+  risk_factors: string[]
+  growth_trend: GrowthTrend
+  goal_contribution_count: number
+  workflow_success_rate: number | null
+  delegation_effectiveness: number | null
+  updated_at: string
+}
+
+export type CareerHistoryEvent = { event_type: string; at: string; [key: string]: unknown }
+export type PerformanceSnapshot = { trust_score: number; success_rate: number; career_score: number; at: string }
+
+export type AgentCareer = {
+  agent_id: string
+  first_task_id: string | null
+  first_task_at: string | null
+  last_task_id: string | null
+  last_task_at: string | null
+  promotion_history: CareerHistoryEvent[]
+  organization_history: CareerHistoryEvent[]
+  performance_history: PerformanceSnapshot[]
+  career_score: number
+  updated_at: string
+}
+
+export type OrganizationHealth = {
+  organization_id: string
+  goal_completion_rate: number
+  workflow_completion_rate: number
+  agent_utilization: number
+  task_throughput: number
+  failure_rate: number
+  autonomy_score: number
+  health_score: number
+  updated_at: string
+}
+
+export type WorkflowIntelligence = {
+  success_rate: number
+  avg_duration_seconds: number | null
+  total_runs: number
+  failure_points: { step_order: number; name: string; failure_count: number }[]
+  avg_handoff_seconds: number | null
+}
+
+export type RankedAgent = { agent_id: string; name: string; trust_score: number; success_rate: number; career_score: number; rank: number }
+export type RankedOrganization = { organization_id: string; name: string; health_score: number; rank: number }
+export type RankedWorkflow = { workflow_id: string; name: string; success_rate: number; total_runs: number }
+export type RankedTemplate = { template_id: string; name: string; deployment_success_rate: number; goal_completion_rate: number; usage_count: number; rank: number }
+
+export type AgentComparison = { agent_id: string; name: string; trust_score: number; success_rate: number; career_score: number; growth_trend: GrowthTrend }
+export type OrganizationComparison = { organization_id: string; name: string; health_score: number; goal_completion_rate: number; workflow_completion_rate: number; failure_rate: number }
+export type WorkflowComparison = { workflow_id: string; name: string; success_rate: number; avg_duration_seconds: number | null; total_runs: number }
+
+export type UnusualFailure = { agent_id: string; agent_name: string; recent_failure_rate: number; historical_failure_rate: number }
+export type DelegationLoop = { task_id: string; delegation_count: number; agents_involved: string[] }
+export type UnderperformingOrganization = { organization_id: string; name: string; health_score: number; platform_avg: number }
+
+export type AnomalyReport = {
+  unusual_failures: UnusualFailure[]
+  trust_score_anomalies: TrustScoreAnomaly[]
+  delegation_loops: DelegationLoop[]
+  workflow_deadlocks: WorkflowDeadlock[]
+  underperforming_organizations: UnderperformingOrganization[]
+}

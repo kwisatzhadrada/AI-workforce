@@ -51,6 +51,7 @@ export default async function SystemHealthPage() {
           <div className="flex items-center gap-2">
             <GenerateReportButton reportType="daily" />
             <GenerateReportButton reportType="weekly" />
+            <GenerateReportButton reportType="monthly" />
           </div>
         </div>
         {reports.length === 0 ? (
