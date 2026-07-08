@@ -1,4 +1,4 @@
-# AI Workforce — Autonomous Organization Layer (v6)
+# AI Workforce — Workforce Templates (v7)
 
 Give every AI worker a verifiable, discoverable identity. Built with **Next.js 16 (App Router)**, **TypeScript**, **Tailwind CSS**, and **Supabase** (Auth, Postgres).
 
@@ -82,6 +82,19 @@ Organizations operate from goals, not tasks: goal → plan → tasks, driven by 
 - 📋 **Dashboard** (`/goals`) — organization picker, `organization_state` summary, goal cards with status/priority/deadline; `/goals/[id]` for plan visualization (steps, dependencies, status, linked tasks), progress, and the manager agent's full decision log.
 - 🔮 **Success metrics stay honest**: target metrics are shown as declared, and plan-step completion is shown as a progress proxy — this phase does not fabricate a "% of 100 leads generated" number, since nothing here yet reads business outcomes back out of task output. That would be a real, separate integration, not something to fake.
 
+## Phase 7 — Workforce Templates
+
+The platform stops being infrastructure and starts being deployable AI businesses: pick "B2B Sales Team," click deploy, and a fully-staffed organization exists — departments, agents with capabilities, a workflow, and goals — in one call.
+
+- 📦 **Templates** (`workforce_templates`) — name, description, industry, a one-line `goal`, and a free-form `configuration` bag. Five real, fully-fleshed system templates ship in migration 010: **B2B Sales Team**, **Customer Support Team**, **Research Team**, **Content Marketing Team**, **Recruiting Team** — not placeholder rows, each with real agents, a real workflow, and real goals.
+- 🧩 **Agent blueprints** (`agent_blueprints`) — name, description, a default system prompt, a `capabilities` array (name/description/cost estimate/schemas — deployed straight into Phase 5's `agent_capabilities`), `memory_defaults` (seeded into Phase 5's `agent_memory` on deploy), a `workflow_role` label, a target `department_slug`, and an `is_manager` flag marking which blueprint becomes a deployed goal's manager agent.
+- 🔁 **Workflow blueprints** (`workflow_blueprints` → `workflow_blueprint_steps`) — an ordered chain, each step optionally tied to a specific agent blueprint or just a department. The B2B Sales Team's is exactly the spec's example: Research Prospect → Qualify Prospect → Outreach → Follow-up.
+- 🎯 **Goal blueprints** (`goal_blueprints`) — title, description, priority, target metrics, and which agent blueprint manages it. Covers all four named examples (Generate Leads, Close Deals, Answer Support Tickets, Create Content) plus two more (research, recruiting) that don't force-fit the named list.
+- 🚀 **Deployment engine** (`deploy_workforce_template()`) — one function, one transaction: creates the organization (Phase 3's trigger seeds membership + standard departments for free), then agents + capabilities + memory + department assignments, then workflows + steps, then goals — wiring blueprint cross-references (which agent fills which workflow step, which agent manages which goal) via an in-memory blueprint-id → deployed-id map. It is **not** `security definer`: the new org is owned by the deploying user, so every write is something an org owner is already allowed to do to their own org under existing RLS — no elevated trust required for something this consequential. Any failure rolls back the entire deployment; nothing half-built is left behind.
+- 🧬 **Lineage tracking** — deployed `agent_assignments`, `workflows`, and `organization_goals` carry a `source_*_blueprint_id` back to the blueprint that created them, which is what makes the goal-completion metric possible.
+- 📊 **Metrics** (`get_template_metrics()`) — Template Usage (`usage_count`, bumped on every deploy), Deployment Success (from `template_deployments`), Goal Completion Rate (completed vs. total goals traced back to that template's `goal_blueprints`). Deliberately `security definer`: these are meant to be public aggregate stats, not silently scoped down by whatever deployments/goals the browsing user's own RLS happens to make visible to them.
+- 🖥️ **Dashboard** (`/templates`) — browse with live metrics; `/templates/[id]` previews the full structure (every agent with its capabilities, the workflow chain, every goal with its target metrics and manager) before you commit, then deploys with one form.
+
 ## Getting started
 
 ### 1. Install dependencies
@@ -102,6 +115,8 @@ npm install
    - `supabase/migrations/006_tasks.sql` — tasks, task history, task reviews, and the workflow↔task integration
    - `supabase/migrations/007_agent_runtime.sql` — capabilities, executions, decision engine, memory, communication, delegation, and a security-hardening pass on earlier phases' internal functions
    - `supabase/migrations/008_goals.sql` — goals, planning engine, task generation, the autonomous manager agent framework, organization state, agent utilization, and a further security-hardening pass
+   - `supabase/migrations/009_workforce_templates.sql` — templates, agent/workflow/goal blueprints, the deployment engine, lineage tracking, and metrics
+   - `supabase/migrations/010_workforce_template_seeds.sql` — five real system templates (B2B Sales, Customer Support, Research, Content Marketing, Recruiting)
 
 ### 3. Configure environment
 
@@ -148,6 +163,10 @@ Open [http://localhost:3000](http://localhost:3000), sign up, then register your
 - **A goal's manager agent is required, not optional, for autonomy.** You can create a goal and even a plan without one, but `run_goal_manager_cycle`/`approve_goal_plan` raise a clear error if no `manager_agent_id` is set — the spec frames this as *an agent's* behavior, so the schema doesn't let the cycle run without one attributed.
 - **`agent_utilization` avoids duplicating Phase 1/4 data.** Task volume and success rate already live on `agent_performance_metrics`; this table adds only the new cumulative-active-time signal, and idle time is computed live from `last_active_at` at read time rather than stored (a stored idle counter would grow stale between writes).
 - **No marketplace, public hiring, or new payment mechanisms were added in Phase 6**, per scope — the manager agent's wallet interactions are unchanged from Phase 5.
+- **The deployment engine trusts existing RLS instead of bypassing it.** Every write `deploy_workforce_template()` makes is scoped to the newly-created organization, which the deploying user owns — so the same policies that let any org owner create agents/workflows/goals for their own org are sufficient. No `security definer` was needed for a function this consequential, which is a stronger security posture than "trust the function."
+- **A rolled-back transaction can't log its own failure.** If deployment fails partway, the whole transaction (org included) rolls back — so the app layer catches the RPC error and calls `log_failed_deployment()` as a separate call in a fresh transaction, rather than the deploy function trying to catch-and-log its own failure internally (which would also roll back along with everything else unless carefully isolated — not worth the complexity here).
+- **Goal completion rate is measured per template, not per deployment.** `source_goal_blueprint_id` traces every deployed goal back to the blueprint that spawned it, so the metric aggregates across every organization that ever deployed the template — a more meaningful signal than any single deployment's snapshot.
+- **No marketplace, payments, or public hiring were added in Phase 7**, per scope — this phase composes Phases 1-6's existing primitives into deployable bundles; it introduces no new business-transaction concepts.
 
 ## Project structure
 
@@ -160,6 +179,8 @@ app/
   api/executions                – GET (list, filtered) / POST (run) execution API
   api/goals/[id]/plan           – POST: draft a plan for a goal via the LLM provider
   (app)/                        – authenticated shell
+    templates                    – browse templates with live usage/success/completion metrics
+    templates/[id]                – preview (agents, workflow, goals) + deploy form
     agents                      – global directory: search, filters, sort, pagination
     agents/new                  – agent registration
     agents/top                  – rankings / leaderboards
@@ -198,11 +219,12 @@ components/
   goals                         – goal card, queue controls, org-state panel, override controls,
                                    plan card, plan step builder, AI plan generation controls,
                                    decision log panel
+  templates                     – template card, deploy form, metrics panel
 lib/
   providers                     – ModelProvider abstraction: OpenAI, Anthropic, local/Ollama
   runtime                       – execution orchestration (decision engine -> provider -> tracking),
                                    AI plan generation
-  supabase, types, agents/registry/organizations/tasks/agentRuntime/goals data-access helpers
+  supabase, types, agents/registry/organizations/tasks/agentRuntime/goals/templates data-access helpers
 supabase/migrations             – database schema + RLS + RPCs
 middleware.ts                   – route protection
 ```

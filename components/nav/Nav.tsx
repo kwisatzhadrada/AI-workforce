@@ -40,6 +40,12 @@ export default function Nav({ profile }: { profile: Profile }) {
             Rankings
           </Link>
           <Link
+            href="/templates"
+            className={`text-sm font-medium ${pathname.startsWith('/templates') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
+          >
+            Templates
+          </Link>
+          <Link
             href="/organizations"
             className={`text-sm font-medium ${pathname.startsWith('/organizations') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
           >

@@ -614,3 +614,103 @@ export type AgentUtilization = {
   task_volume: number
   success_rate: number
 }
+
+// ============================================================
+// Workforce Templates (Phase 7)
+// ============================================================
+
+export type WorkforceTemplate = {
+  id: string
+  name: string
+  description: string | null
+  industry: string | null
+  goal: string | null
+  configuration: Record<string, unknown>
+  created_by: string | null
+  usage_count: number
+  created_at: string
+  updated_at: string
+}
+
+export type CapabilityBlueprint = {
+  name: string
+  description?: string
+  cost_estimate?: number
+  input_schema?: Record<string, unknown>
+  output_schema?: Record<string, unknown>
+}
+
+export type MemoryDefaultBlueprint = {
+  memory_type: MemoryType
+  key: string
+  value: unknown
+}
+
+export type AgentBlueprint = {
+  id: string
+  template_id: string
+  name: string
+  description: string | null
+  default_prompt: string | null
+  capabilities: CapabilityBlueprint[]
+  memory_defaults: MemoryDefaultBlueprint[]
+  workflow_role: string | null
+  department_slug: string | null
+  is_manager: boolean
+  created_at: string
+}
+
+export type WorkflowBlueprint = {
+  id: string
+  template_id: string
+  name: string
+  description: string | null
+  created_at: string
+  workflow_blueprint_steps?: WorkflowBlueprintStep[]
+}
+
+export type WorkflowBlueprintStep = {
+  id: string
+  workflow_blueprint_id: string
+  step_order: number
+  name: string
+  agent_blueprint_id: string | null
+  department_slug: string | null
+  created_at: string
+  agent_blueprints?: Pick<AgentBlueprint, 'id' | 'name'>
+}
+
+export type GoalBlueprint = {
+  id: string
+  template_id: string
+  title: string
+  description: string | null
+  priority: TaskPriority
+  target_metrics: Record<string, unknown>
+  manager_agent_blueprint_id: string | null
+  created_at: string
+  agent_blueprints?: Pick<AgentBlueprint, 'id' | 'name'>
+}
+
+export type DeploymentStatus = 'success' | 'failed'
+
+export type TemplateDeployment = {
+  id: string
+  template_id: string
+  organization_id: string | null
+  deployed_by: string
+  status: DeploymentStatus
+  error: string | null
+  created_at: string
+  organizations?: Pick<Organization, 'id' | 'name'>
+}
+
+export type TemplateMetrics = {
+  usage_count: number
+  deployments_total: number
+  deployments_success: number
+  deployment_success_rate: number
+  goals_total: number
+  goals_completed: number
+  goal_completion_rate: number
+}
