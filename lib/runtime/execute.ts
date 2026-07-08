@@ -92,15 +92,29 @@ export async function runAgentExecution(supabase: SupabaseClient, params: RunExe
       provider: providerName,
       input,
       created_by: createdBy,
+      integration_action: capability?.integration_action || null,
     })
     .select('*')
     .single()
 
   if (insertError || !queued) {
+    // 23505 = unique_violation. The partial unique index on
+    // (task_id, integration_action) is what actually prevents a real-world
+    // side effect (an email send, a CRM write) from firing twice for the
+    // same task — this just turns the raw constraint error into a message
+    // that explains what happened instead of a bare Postgres error string.
+    if (insertError?.code === '23505') {
+      return {
+        execution: null,
+        error: `${capability?.name || 'This action'} has already run (or is currently running) for this task — create a new task if more work is genuinely needed`,
+      }
+    }
     return { execution: null, error: insertError?.message || 'Failed to create execution' }
   }
 
   await supabase.from('agent_executions').update({ status: 'running', started_at: new Date().toISOString() }).eq('id', queued.id)
+
+  let integrationOrgId: string | null = null
 
   try {
     let executionOutput: Record<string, unknown>
@@ -118,6 +132,7 @@ export async function runAgentExecution(supabase: SupabaseClient, params: RunExe
       if (!task?.organization_id) {
         throw new Error('Task not found or has no organization')
       }
+      integrationOrgId = task.organization_id
 
       const result = await dispatchIntegrationAction(supabase, capability.integration_action, {
         organizationId: task.organization_id,
@@ -184,8 +199,23 @@ export async function runAgentExecution(supabase: SupabaseClient, params: RunExe
 
     await supabase.rpc('decide_request_assistance', { p_agent_id: agentId, p_task_id: taskId, p_execution_id: queued.id })
 
+    // A real integration failure is worth recording against the
+    // organization's connection status, not just the execution row — this
+    // is what the Integrations tab and diagnostics page surface as
+    // "last_error" so a broken connection is visible without reading logs.
+    if (capability?.integration_action && integrationOrgId) {
+      const provider = INTEGRATION_ACTION_PROVIDER[capability.integration_action]
+      await supabase.rpc('record_integration_error', { p_org_id: integrationOrgId, p_provider: provider, p_error: message })
+    }
+
     return { execution: (failed as AgentExecution) || null, error: null }
   }
+}
+
+const INTEGRATION_ACTION_PROVIDER: Record<IntegrationAction, string> = {
+  prospect_enrich: 'hunter',
+  email_draft_send: 'gmail',
+  crm_upsert: 'hubspot',
 }
 
 async function dispatchIntegrationAction(

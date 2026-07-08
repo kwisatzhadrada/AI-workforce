@@ -28,7 +28,9 @@ export class HubSpotCrmProvider implements CrmProvider {
 
     if (!res.ok) {
       const body = await res.text().catch(() => '')
-      throw new Error(`HubSpot request failed (${res.status}) on ${path}: ${body.slice(0, 300)}`)
+      const err = new Error(`HubSpot request failed (${res.status}) on ${path}: ${body.slice(0, 300)}`)
+      ;(err as Error & { status?: number }).status = res.status
+      throw err
     }
     if (res.status === 204) return null
     return res.json()
@@ -47,20 +49,32 @@ export class HubSpotCrmProvider implements CrmProvider {
   }
 
   async createContact(fields: CrmContactFields): Promise<string> {
-    const result = (await this.request('/crm/v3/objects/contacts', {
-      method: 'POST',
-      body: JSON.stringify({
-        properties: {
-          email: fields.email,
-          firstname: fields.firstName || undefined,
-          lastname: fields.lastName || undefined,
-          company: fields.company || undefined,
-          jobtitle: fields.jobTitle || undefined,
-        },
-      }),
-    })) as { id: string }
+    try {
+      const result = (await this.request('/crm/v3/objects/contacts', {
+        method: 'POST',
+        body: JSON.stringify({
+          properties: {
+            email: fields.email,
+            firstname: fields.firstName || undefined,
+            lastname: fields.lastName || undefined,
+            company: fields.company || undefined,
+            jobtitle: fields.jobTitle || undefined,
+          },
+        }),
+      })) as { id: string }
 
-    return result.id
+      return result.id
+    } catch (err) {
+      // HubSpot itself enforces email uniqueness and returns 409 Conflict
+      // for a contact that already exists — a second, independent layer of
+      // duplicate protection beneath our own agent_executions unique index.
+      // Recover by reusing the existing contact rather than failing the task.
+      if ((err as Error & { status?: number }).status === 409) {
+        const existingId = await this.findContactByEmail(fields.email)
+        if (existingId) return existingId
+      }
+      throw err
+    }
   }
 
   async updateContact(contactId: string, fields: Partial<CrmContactFields>): Promise<void> {

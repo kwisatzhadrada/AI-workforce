@@ -99,6 +99,14 @@ export default function Nav({ profile }: { profile: Profile }) {
               Intelligence
             </Link>
           )}
+          {profile.is_admin && (
+            <Link
+              href="/diagnostics"
+              className={`text-sm font-medium ${pathname.startsWith('/diagnostics') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
+            >
+              Diagnostics
+            </Link>
+          )}
           <div className="w-8 h-8 rounded-full bg-[#6D28D9] flex items-center justify-center text-xs font-semibold text-white">
             {getInitials(profile.full_name)}
           </div>

@@ -1,4 +1,4 @@
-# AI Workforce — B2B Sales Vertical: Real Integrations (v10)
+# AI Workforce — B2B Sales Vertical: Real Integrations (v10, Stabilization Sprint 1)
 
 Give every AI worker a verifiable, discoverable identity. Built with **Next.js 16 (App Router)**, **TypeScript**, **Tailwind CSS**, and **Supabase** (Auth, Postgres).
 
@@ -137,6 +137,18 @@ Not a new platform layer — this phase makes the existing B2B Sales Team workfo
 - 📘 **`DEPLOYMENT_GUIDE.md`** — the real steps to run this against live accounts: a Supabase project, a deployed host with a public URL, a Google Cloud OAuth consent screen (in "Testing" mode — the sensitive `gmail.send` scope otherwise needs a verification review that can take weeks), a HubSpot Private App token, and a Hunter.io API key.
 - 🔬 **Validated end to end** — real template deployment, real RLS/RPC authorization checks, and the real `GmailEmailProvider`/`HunterProspectProvider`/`HubSpotCrmProvider` classes called against their live endpoints with deliberately invalid credentials, confirming the request shapes are correct (Gmail; Hunter.io/HubSpot were blocked by this validation session's own sandboxed network policy, not by the code). That pass found two real, pre-existing bugs that Phase 10's real-world side effects newly make consequential: nothing stops a duplicate "Run Execution" click from sending the same real email twice, and the goal-driven auto-assignment (Phase 6) can staff the wrong agent onto a step when every agent ties at trust score 0. Neither is fixed here — this pass was validation and documentation, not new development — see the full validation report for root causes and recommended fixes.
 
+## Stabilization Sprint 1
+
+Not a new phase — no new agent, workflow, intelligence, or business-model concept was introduced. This sprint exists to fix the two real bugs Phase 10's validation pass found and left open, then verify the fix against a real Postgres role rather than just the code. See `RELIABILITY_REPORT.md` for the full Critical/High/Medium/Low breakdown and `VALIDATION_CHECKLIST.md` for the pre-flight checklist before pointing this at real Gmail/HubSpot/Hunter accounts.
+
+- 🔒 **Duplicate real-world side effects are now impossible, not just discouraged.** `agent_executions` gained an `integration_action` column and a partial unique index on `(task_id, integration_action)` covering `queued`/`running`/`completed` — Postgres itself rejects a second attempt at the same real-world action on the same task, atomically, even under concurrent requests. A genuinely `failed` attempt is deliberately excluded, so transient failures stay retryable. HubSpot's own native 409-conflict-on-duplicate-email is now also caught and recovered (reuses the existing contact) as a second, independent layer.
+- 🎯 **Assignment accuracy — two bugs, not one.** The fragile `ILIKE` substring/first-word capability matcher is replaced with `capability_matches_task()`, a whole-word-overlap matcher, plus a two-pass assignment loop (require a real match first, only fall back if truly nobody matches). Fixing that exposed a second, deeper bug the old matcher had been silently hiding: every fresh agent's wallet starts at $0, and once a real capability match started flowing into the accept-task decision, its wallet-balance check began rejecting the *correctly* matched agent in favor of a wrong-but-affordable one. Assignment no longer passes a capability into that billing check — billing still happens, correctly, at execution time, where it always worked.
+- 🔍 **A third, more severe bug was found in the process of testing the above for real**: `deploy_workforce_template()` was never marked `security definer`, meaning every real "Deploy Template" click — for any template, since Phase 9 — failed outright for an actual signed-in user with `permission denied for function increment_template_usage`. Every prior phase's local testing had silently masked this behind a blanket `grant execute on all functions` step that real Supabase never performs. Fixed by making the function `security definer` (no new privilege — every write inside was already scoped to the real caller's `auth.uid()`).
+- 📟 **New `/diagnostics` page** (admin-only, same gating pattern as `/system-health`) — execution history, integration connect/disconnect/error history, recent failures, retries (tasks with more than one execution row — no new "retry count" concept), and assignment decisions (now with real reasoning: which capability matched, or why it fell back). Backed by five new `security definer` + `is_admin()`-gated RPCs, reusing `agent_executions`/`agent_decisions`/`organization_activity` exactly as they already existed — no new tables.
+- 📗 **`VALIDATION_CHECKLIST.md`** — pre-flight checklist for pointing this at real Gmail/HubSpot/Hunter.io accounts, including the exact SQL to confirm each fix landed and an explicit warning against the blanket-grant testing shortcut that hid two of this sprint's three findings.
+- 📕 **`RELIABILITY_REPORT.md`** — Critical/High/Medium/Low risk breakdown with mitigation status for every finding this sprint, plus the carried-over open items from Phase 10 (workflow-path task descriptions, credential encryption at rest, no background worker) that remain documented, not fixed, by explicit scope decision.
+- 🧪 **Verified the same way as every phase since 8** — every migration applied in order against a real local Postgres 16 instance, `SET ROLE authenticated` exercised as both a genuine org owner and an unrelated outsider in both directions, and this time specifically *without* the blanket-grant shortcut, which is what surfaced the `deploy_workforce_template` and wallet-balance bugs in the first place.
+
 ## Getting started
 
 ### 1. Install dependencies
@@ -162,6 +174,7 @@ npm install
    - `supabase/migrations/011_simulation.sql` — simulation runs/events/metrics, the seeding/resolution engine, organization stress metrics, bottleneck analysis, network health, autonomy scoring, and executive reporting
    - `supabase/migrations/012_intelligence.sql` — agent/organization/workflow intelligence, the prediction and recommendation engines, self-optimization (human-approval-required), benchmarking, anomaly detection, and the extended (`daily`/`weekly`/`monthly`) executive report
    - `supabase/migrations/013_sales_integrations.sql` — integration credential storage, the sales activity ledger + metrics function, `agent_capabilities.integration_action`, and the B2B Sales Team template updates (Prospect Research / Outreach Send / CRM Sync, CRM Agent)
+   - `supabase/migrations/014_stabilization.sql` — the duplicate-execution unique index, `capability_matches_task()` + the two-pass assignment fix, the `deploy_workforce_template()` security-definer fix, integration event logging to `organization_activity`, and the five `/diagnostics` RPCs
 
 ### 3. Configure environment
 
@@ -228,6 +241,9 @@ Open [http://localhost:3000](http://localhost:3000), sign up, then register your
 - **HubSpot and Hunter.io connect via a pasted token, not OAuth** — both providers' own current recommendation for a single-account custom integration, and the pragmatic choice given this environment has no live OAuth app registered with either. Gmail *does* use real OAuth2, since Google requires it and a registered `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` is realistic homework for whoever deploys this. An OAuth app for HubSpot would be the natural next step for a multi-account, install-from-marketplace product.
 - **Company *discovery* from a target-market description is out of scope; company *enrichment* from a known domain is what's built.** Hunter.io's real, free-tier Domain Search API turns a domain into real people — it does not turn "Series A fintech SaaS companies" into a list of domains. That needs a paid firmographic API (Apollo, Clearbit Discovery, ZoomInfo). The `ProspectProvider` interface exists precisely so that's a config change later, not a rewrite; today, an operator seeds target domains directly (in the "Research Prospect" task's description), which is exactly how many real SDR workflows already start — from an account list, not a blank industry filter.
 - **This phase's database layer was verified the same way Phases 8-9 were** — every migration applied against a real local Postgres instance, `deploy_workforce_template()` was actually run and its deployed agents' capabilities confirmed correctly tagged with `integration_action`, and every RLS/RPC authorization boundary (`organization_integrations`, `sales_activities`, `connect_integration`, `record_sales_activity`) was exercised as both the legitimate owner and an unrelated `authenticated` user via `SET ROLE`, in both directions. What could **not** be verified here: any actual live call to Gmail, HubSpot, or Hunter.io, since this environment has no real credentials for any of the three — the same honest limitation Phase 5's LLM providers have always carried.
+- **Assignment and billing are now two separate questions, not one.** `assign_best_agent_for_task()` used to pass a candidate's matched capability straight into `decide_agent_accept_task()`, which both gates capacity/status *and* checks wallet balance for that capability's cost. That conflated "is this the right agent for this task" with "can this agent currently afford to run it" — harmless while the capability match was almost never found (the old `ILIKE` matcher's bug), but actively wrong once matching started working: a fresh agent's $0 wallet made the *correct* agent lose to an unrelated, nominally-free one. Assignment now always passes a `null` capability into that call; the real balance check still happens, correctly, at execution time.
+- **A `security definer` gap can hide for a long time if local testing is too permissive.** `deploy_workforce_template()`'s missing `security definer` (see Stabilization Sprint 1 above) went undetected across Phases 9 and 10 because this project's own local-Postgres testing habit of granting broad `EXECUTE` to `authenticated` before running checks silently papered over it every time. The fix wasn't just the code change — it was re-running every migration's explicit `revoke` statements before re-testing, so the test environment's grants actually matched what a real Supabase project would have.
+- **No new architecture, tables, or business concepts were added in Stabilization Sprint 1**, per scope — the unique index, the improved matcher, the security-definer fix, and the five diagnostics RPCs all read or write tables/columns that already existed (with one additive column, `agent_executions.integration_action`, denormalized purely so the partial unique index can target it directly).
 
 ## Project structure
 
@@ -273,6 +289,8 @@ app/
                                    history, bottleneck analysis, run-simulation + report generation
     intelligence                  – admin-only: Agents/Organizations/Workflows/Predictions/
                                    Recommendations/Anomalies/Reports tabs
+    diagnostics                   – admin-only: execution history, integration history,
+                                   failures, retries, assignment decisions
 components/
   nav                           – top nav
   agents                        – directory controls, agent card, badges, follow button,
@@ -295,7 +313,9 @@ components/
                                    apply), org-scoped refresh/generate controls, anomalies panel
   sales                          – integrations panel + token connect form + disconnect button,
                                    sales metrics panel, activity feed, check-replies button,
-                                   log-a-booked-meeting form
+                                   log-a-booked-meeting form, setup wizard panel
+  diagnostics                    – execution history, integration history, failures, retries,
+                                   and assignment-decision panels
 lib/
   providers                     – ModelProvider abstraction: OpenAI, Anthropic, local/Ollama
   integrations                   – EmailProvider/CrmProvider/ProspectProvider abstraction: Gmail
@@ -305,7 +325,7 @@ lib/
                                    tagged for one), sales action handlers, on-demand reply checking,
                                    AI plan generation
   supabase, types, agents/registry/organizations/tasks/agentRuntime/goals/templates/simulation/
-                                   intelligence/sales data-access helpers
+                                   intelligence/sales/diagnostics data-access helpers
 supabase/migrations             – database schema + RLS + RPCs
 middleware.ts                   – route protection
 ```

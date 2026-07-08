@@ -455,6 +455,7 @@ export type AgentExecution = {
   input: Record<string, unknown>
   output: Record<string, unknown> | null
   error: string | null
+  integration_action: IntegrationAction | null
   started_at: string | null
   completed_at: string | null
   execution_time_ms: number | null
@@ -979,4 +980,62 @@ export type SalesMetrics = {
   replies_received: number
   meetings_booked: number
   reply_rate: number
+}
+
+export type ExecutionHistoryRow = {
+  execution_id: string
+  agent_id: string
+  agent_name: string
+  task_id: string | null
+  task_title: string | null
+  capability_name: string | null
+  integration_action: IntegrationAction | null
+  status: string
+  provider: string
+  error: string | null
+  created_at: string
+  completed_at: string | null
+}
+
+export type IntegrationHistoryRow = {
+  id: string
+  organization_id: string
+  organization_name: string
+  activity_type: string
+  payload: Record<string, unknown>
+  created_at: string
+}
+
+export type ExecutionFailureRow = {
+  execution_id: string
+  agent_id: string
+  agent_name: string
+  task_id: string | null
+  task_title: string | null
+  error: string | null
+  created_at: string
+}
+
+export type TaskRetryRow = {
+  task_id: string
+  task_title: string
+  organization_id: string
+  organization_name: string
+  execution_count: number
+  last_status: string
+  last_created_at: string
+}
+
+export type AssignmentDecisionRow = {
+  id: string
+  task_id: string | null
+  task_title: string | null
+  manager_agent_id: string
+  manager_agent_name: string
+  assigned_agent_id: string | null
+  assigned_agent_name: string | null
+  outcome: string
+  reasoning: string
+  outputs: Record<string, unknown>
+  created_at: string
 }
