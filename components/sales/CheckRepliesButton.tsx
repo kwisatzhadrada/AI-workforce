@@ -19,7 +19,8 @@ export default function CheckRepliesButton({ organizationId }: { organizationId:
     const body = await res.json().catch(() => ({}))
     setRunning(false)
     if (!res.ok) { setMessage(body.error || 'Failed to check replies'); return }
-    setMessage(`Checked ${body.checked} sent email(s) — ${body.newReplies} new repl${body.newReplies === 1 ? 'y' : 'ies'}`)
+    const failedNote = body.failed > 0 ? ` (${body.failed} could not be checked — see Integrations tab)` : ''
+    setMessage(`Checked ${body.checked} sent email(s) — ${body.newReplies} new repl${body.newReplies === 1 ? 'y' : 'ies'}${failedNote}`)
     router.refresh()
   }
 

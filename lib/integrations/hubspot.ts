@@ -1,4 +1,5 @@
 import { CrmContactFields, CrmProvider, IntegrationConfigError } from './types'
+import { classifyHttpError, describeNetworkError, fetchWithRetry } from './errors'
 
 const HUBSPOT_API = 'https://api.hubapi.com'
 
@@ -17,18 +18,23 @@ export class HubSpotCrmProvider implements CrmProvider {
       throw new IntegrationConfigError('HubSpot is not connected for this organization')
     }
 
-    const res = await fetch(`${HUBSPOT_API}${path}`, {
-      ...init,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.accessToken}`,
-        ...(init.headers || {}),
-      },
-    })
+    let res: Response
+    try {
+      res = await fetchWithRetry(`${HUBSPOT_API}${path}`, {
+        ...init,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.accessToken}`,
+          ...(init.headers || {}),
+        },
+      })
+    } catch (err) {
+      throw new Error(describeNetworkError('HubSpot', err))
+    }
 
     if (!res.ok) {
       const body = await res.text().catch(() => '')
-      const err = new Error(`HubSpot request failed (${res.status}) on ${path}: ${body.slice(0, 300)}`)
+      const err = new Error(classifyHttpError('HubSpot', res.status, body))
       ;(err as Error & { status?: number }).status = res.status
       throw err
     }

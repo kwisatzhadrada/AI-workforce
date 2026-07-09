@@ -208,6 +208,7 @@ export type Organization = {
   avatar_url: string | null
   website_url: string | null
   industry: string | null
+  avg_deal_value: number | null
   created_at: string
   updated_at: string
   profiles?: Profile
@@ -383,6 +384,9 @@ export type Task = {
   attachments: string[]
   workflow_run_id: string | null
   workflow_step_id: string | null
+  requires_approval: boolean
+  approved_at: string | null
+  approved_by: string | null
   created_at: string
   updated_at: string
   organizations?: Pick<Organization, 'id' | 'name'>
@@ -980,6 +984,17 @@ export type SalesMetrics = {
   replies_received: number
   meetings_booked: number
   reply_rate: number
+  avg_deal_value: number | null
+  estimated_pipeline_value: number
+}
+
+export type OutreachDraft = {
+  email: string
+  name: string | null
+  company: string | null
+  domain: string
+  subject: string
+  body: string
 }
 
 export type ExecutionHistoryRow = {

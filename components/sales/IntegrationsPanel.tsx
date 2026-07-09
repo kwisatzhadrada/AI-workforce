@@ -27,11 +27,13 @@ export default function IntegrationsPanel({
   integrations,
   isManager,
   error,
+  gmailReturnTo,
 }: {
   organizationId: string
   integrations: OrganizationIntegration[]
   isManager: boolean
   error?: string
+  gmailReturnTo?: 'onboarding'
 }) {
   const byProvider = new Map(integrations.map((i) => [i.provider, i]))
 
@@ -60,7 +62,7 @@ export default function IntegrationsPanel({
               <>
                 {p.provider === 'gmail' && (
                   <a
-                    href={`/api/integrations/gmail/connect?org_id=${organizationId}`}
+                    href={`/api/integrations/gmail/connect?org_id=${organizationId}${gmailReturnTo ? `&from=${gmailReturnTo}` : ''}`}
                     className="inline-block bg-[#6D28D9] hover:bg-[#5B21B6] text-white px-4 py-2 rounded-lg text-sm font-medium"
                   >
                     Connect with Google

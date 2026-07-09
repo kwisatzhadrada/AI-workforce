@@ -24,10 +24,13 @@ import MarkMeetingBookedForm from '@/components/sales/MarkMeetingBookedForm'
 import { getOrganizationIntegrations, getSalesActivity, getSalesMetrics } from '@/lib/sales'
 import SetupWizardPanel from '@/components/sales/SetupWizardPanel'
 import { getSetupWizardState } from '@/lib/setupWizard'
+import CampaignDashboard from '@/components/campaigns/CampaignDashboard'
+import CampaignLaunchForm from '@/components/campaigns/CampaignLaunchForm'
+import { getCampaignState } from '@/lib/campaigns'
 
 export const dynamic = 'force-dynamic'
 
-const VALID_TABS = ['overview', 'departments', 'agents', 'performance', 'tasks', 'workflows', 'activity', 'sales', 'integrations', 'setup'] as const
+const VALID_TABS = ['overview', 'departments', 'agents', 'performance', 'tasks', 'workflows', 'activity', 'sales', 'integrations', 'setup', 'campaign'] as const
 type Tab = (typeof VALID_TABS)[number]
 
 export default async function OrganizationPage({
@@ -97,6 +100,7 @@ export default async function OrganizationPage({
       {tab === 'sales' && <SalesTab organizationId={id} />}
       {tab === 'integrations' && <IntegrationsTab organizationId={id} isManager={!!isManager} error={Array.isArray(sp.error) ? sp.error[0] : sp.error} />}
       {tab === 'setup' && <SetupWizardTab organizationId={id} />}
+      {tab === 'campaign' && <CampaignTab organizationId={id} />}
     </div>
   )
 }
@@ -371,4 +375,15 @@ async function SetupWizardTab({ organizationId }: { organizationId: string }) {
   const state = await getSetupWizardState(supabase, organizationId)
 
   return <SetupWizardPanel state={state} />
+}
+
+async function CampaignTab({ organizationId }: { organizationId: string }) {
+  const supabase = await createClient()
+  const state = await getCampaignState(supabase, organizationId)
+
+  return state.goal ? (
+    <CampaignDashboard organizationId={organizationId} state={state} />
+  ) : (
+    <CampaignLaunchForm organizationId={organizationId} />
+  )
 }

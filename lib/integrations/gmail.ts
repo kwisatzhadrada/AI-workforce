@@ -1,4 +1,5 @@
 import { EmailProvider, IntegrationConfigError, ReplyCheckResult, SendEmailResult } from './types'
+import { classifyHttpError, describeNetworkError, fetchWithRetry } from './errors'
 
 const GMAIL_API = 'https://gmail.googleapis.com/gmail/v1/users/me'
 
@@ -29,20 +30,32 @@ export class GmailEmailProvider implements EmailProvider {
       throw new IntegrationConfigError('Gmail is not connected for this organization')
     }
 
-    const res = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: this.credentials.refreshToken,
-        grant_type: 'refresh_token',
-      }),
-    })
+    let res: Response
+    try {
+      res = await fetchWithRetry('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          refresh_token: this.credentials.refreshToken,
+          grant_type: 'refresh_token',
+        }),
+      })
+    } catch (err) {
+      throw new Error(describeNetworkError('Gmail', err))
+    }
 
     if (!res.ok) {
       const body = await res.text().catch(() => '')
-      throw new Error(`Gmail token refresh failed (${res.status}): ${body.slice(0, 300)}`)
+      // A refresh-token exchange rejected with 400/401 almost always means
+      // the connection was revoked (e.g. from myaccount.google.com) rather
+      // than a scoped permission issue — say so plainly rather than
+      // parroting Google's raw invalid_grant body.
+      if (res.status === 400 || res.status === 401) {
+        throw new Error('Gmail connection was revoked or expired — reconnect Gmail from the Integrations tab.')
+      }
+      throw new Error(classifyHttpError('Gmail', res.status, body))
     }
 
     const data = await res.json()
@@ -63,15 +76,20 @@ export class GmailEmailProvider implements EmailProvider {
 
     const raw = Buffer.from(mime).toString('base64url')
 
-    const res = await fetch(`${GMAIL_API}/messages/send`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ raw }),
-    })
+    let res: Response
+    try {
+      res = await fetchWithRetry(`${GMAIL_API}/messages/send`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raw }),
+      })
+    } catch (err) {
+      throw new Error(describeNetworkError('Gmail', err))
+    }
 
     if (!res.ok) {
       const body = await res.text().catch(() => '')
-      throw new Error(`Gmail send failed (${res.status}): ${body.slice(0, 300)}`)
+      throw new Error(classifyHttpError('Gmail', res.status, body))
     }
 
     const data = await res.json()
@@ -81,13 +99,18 @@ export class GmailEmailProvider implements EmailProvider {
   async checkReplies(threadId: string, sentMessageId: string): Promise<ReplyCheckResult> {
     const accessToken = await this.getAccessToken()
 
-    const res = await fetch(`${GMAIL_API}/threads/${threadId}?format=metadata&metadataHeaders=From`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
+    let res: Response
+    try {
+      res = await fetchWithRetry(`${GMAIL_API}/threads/${threadId}?format=metadata&metadataHeaders=From`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+    } catch (err) {
+      throw new Error(describeNetworkError('Gmail', err))
+    }
 
     if (!res.ok) {
       const body = await res.text().catch(() => '')
-      throw new Error(`Gmail thread lookup failed (${res.status}): ${body.slice(0, 300)}`)
+      throw new Error(classifyHttpError('Gmail', res.status, body))
     }
 
     const data = await res.json()

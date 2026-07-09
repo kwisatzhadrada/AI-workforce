@@ -17,9 +17,15 @@ export async function GET(request: NextRequest) {
   if (!orgId) {
     return NextResponse.json({ error: 'org_id is required' }, { status: 400 })
   }
+  // 'from=onboarding' round-trips through state so the callback can send
+  // the user back to the guided onboarding flow instead of the org's
+  // Integrations tab — purely a routing hint, same trust model as orgId
+  // itself (connect_integration re-checks is_org_manager regardless).
+  const from = request.nextUrl.searchParams.get('from')
+  const state = from === 'onboarding' ? `${orgId}|onboarding` : orgId
 
   try {
-    const url = getGmailOAuthUrl(orgId)
+    const url = getGmailOAuthUrl(state)
     return NextResponse.redirect(url)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Gmail is not configured on this deployment'

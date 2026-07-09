@@ -28,6 +28,12 @@ export default function Nav({ profile }: { profile: Profile }) {
         </Link>
         <div className="flex items-center gap-4 flex-wrap justify-end">
           <Link
+            href="/onboarding"
+            className={`text-sm font-medium px-3 py-1.5 rounded-lg ${pathname.startsWith('/onboarding') ? 'bg-[#6D28D9] text-white' : 'bg-[#6D28D9]/20 text-[#6D28D9] hover:bg-[#6D28D9]/30'}`}
+          >
+            Get Started
+          </Link>
+          <Link
             href="/agents"
             className={`text-sm font-medium ${pathname === '/agents' || pathname.startsWith('/agent/') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
           >

@@ -1,7 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { getProvider, ModelProviderName, ProviderConfigError } from '@/lib/providers'
 import { IntegrationConfigError } from '@/lib/integrations'
-import { runCrmSync, runEmailOutreach, runProspectEnrichment } from './salesActions'
+import { runCrmSync, runEmailOutreachDraft, runProspectEnrichment } from './salesActions'
 import { AgentExecution, IntegrationAction } from '@/lib/types'
 
 export type RunExecutionParams = {
@@ -227,7 +227,7 @@ async function dispatchIntegrationAction(
     case 'prospect_enrich':
       return runProspectEnrichment(supabase, params)
     case 'email_draft_send':
-      return runEmailOutreach(supabase, params)
+      return runEmailOutreachDraft(supabase, params)
     case 'crm_upsert':
       return runCrmSync(supabase, params)
   }

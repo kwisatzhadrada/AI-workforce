@@ -1,4 +1,5 @@
 import { EnrichedCompany, IntegrationConfigError, ProspectContact, ProspectProvider } from './types'
+import { classifyHttpError, describeNetworkError, fetchWithRetry } from './errors'
 
 // Hunter.io Domain Search — a real, free-tier API (no OAuth) that turns a
 // company domain into real people and verified-pattern email addresses at
@@ -18,11 +19,16 @@ export class HunterProspectProvider implements ProspectProvider {
     }
 
     const url = `https://api.hunter.io/v2/domain-search?domain=${encodeURIComponent(domain)}&api_key=${encodeURIComponent(this.apiKey)}&limit=10`
-    const res = await fetch(url)
+    let res: Response
+    try {
+      res = await fetchWithRetry(url, {})
+    } catch (err) {
+      throw new Error(describeNetworkError('Hunter.io', err))
+    }
 
     if (!res.ok) {
       const body = await res.text().catch(() => '')
-      throw new Error(`Hunter.io domain search failed for ${domain} (${res.status}): ${body.slice(0, 300)}`)
+      throw new Error(classifyHttpError('Hunter.io', res.status, body))
     }
 
     const data = await res.json()

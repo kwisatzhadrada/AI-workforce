@@ -2,6 +2,7 @@ import Link from 'next/link'
 
 const TABS = [
   { value: 'overview', label: 'Overview' },
+  { value: 'campaign', label: 'Campaign' },
   { value: 'departments', label: 'Departments' },
   { value: 'agents', label: 'Agents' },
   { value: 'performance', label: 'Performance' },

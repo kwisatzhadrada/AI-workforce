@@ -1,4 +1,4 @@
-# AI Workforce — B2B Sales Vertical: Real Integrations (v10, Stabilization Sprint 1)
+# AI Workforce — B2B Sales Vertical: Real Integrations (v10, Stabilization Sprint 1, Campaign Experience Sprint)
 
 Give every AI worker a verifiable, discoverable identity. Built with **Next.js 16 (App Router)**, **TypeScript**, **Tailwind CSS**, and **Supabase** (Auth, Postgres).
 
@@ -149,6 +149,79 @@ Not a new phase — no new agent, workflow, intelligence, or business-model conc
 - 📕 **`RELIABILITY_REPORT.md`** — Critical/High/Medium/Low risk breakdown with mitigation status for every finding this sprint, plus the carried-over open items from Phase 10 (workflow-path task descriptions, credential encryption at rest, no background worker) that remain documented, not fixed, by explicit scope decision.
 - 🧪 **Verified the same way as every phase since 8** — every migration applied in order against a real local Postgres 16 instance, `SET ROLE authenticated` exercised as both a genuine org owner and an unrelated outsider in both directions, and this time specifically *without* the blanket-grant shortcut, which is what surfaced the `deploy_workforce_template` and wallet-balance bugs in the first place.
 
+## Campaign Experience Sprint
+
+Not a new phase, no new platform layer — this sprint makes the B2B Sales
+Workforce usable by a non-technical business owner end to end: create an
+organization, deploy the workforce, connect integrations, launch a
+campaign, review before anything sends, and see business outcomes —
+without touching SQL or picking a capability from a dropdown. See
+`BLOCKERS.md` for what's still genuinely open, ranked by severity.
+
+- 🧭 **`/onboarding`** — a single guided page from account to running
+  campaign: (1) name your business, one click deploys a full B2B Sales
+  Team workforce (`deploy_workforce_template()`, unchanged), (2) connect
+  Gmail/HubSpot/Hunter.io (reuses the existing `IntegrationsPanel`), (3)
+  launch a campaign. Each step reads real database state on every load
+  (not client-only wizard state), so a Gmail OAuth redirect or a page
+  refresh never loses progress.
+- 🎯 **Guided campaign launch** (`lib/campaigns.ts`) — a business user
+  describes who they're selling to (industry, company size, location, ICP
+  description) instead of writing a task description by hand. If they
+  paste real target-company domains, those are used directly; if not, an
+  LLM suggests candidate domains via the existing provider abstraction —
+  clearly labeled "AI-suggested" everywhere it's shown, since Hunter.io
+  (the only real prospect data source here) enriches a *known* domain, it
+  doesn't discover companies from a description. This one honest
+  limitation is documented, not hidden — see `BLOCKERS.md` #1.
+- 🖐️ **A real human-approval gate before any email sends** — `tasks`
+  gained `requires_approval`/`approved_at`/`approved_by`. The Outreach
+  Agent's capability now only drafts (never sends) when run — the draft
+  is written to the same `tasks.output` column step-to-step data passing
+  already used, and the task is flagged `requires_approval`. A new
+  `approve_task_output()` RPC (supervisor-gated, same bar as
+  `approve_goal_plan`) and a dedicated `sendApprovedOutreach()` action
+  (deliberately outside `agent_executions` — same precedent as "Check
+  Replies"/"Log a Booked Meeting" before it) are the only path that
+  actually calls Gmail's send API. Every draft is shown in full before
+  that click.
+- ⏸️ **Pause / Resume / Stop Campaign** controls on the Campaign
+  Dashboard needed no new schema at all — `organization_goals.is_paused`
+  (Phase 6) and `lib/goals.ts`'s existing `setGoalStatus(..., 'failed')`
+  already did exactly this; this sprint only surfaces them prominently in
+  the guided UI instead of leaving them buried in the goal detail page.
+- 📊 **Estimated Pipeline Value** — `organizations.avg_deal_value` (one
+  new nullable column) + a `set_avg_deal_value()` RPC. `get_sales_metrics()`
+  (Phase 10) is extended, not replaced, to multiply
+  `meetings_booked × avg_deal_value` — the ROI dashboard is business
+  outcomes (prospects, emails, replies, meetings, pipeline value), not AI
+  metrics, per this sprint's explicit framing.
+- 🛡️ **Every real integration call now classifies its own failure and
+  retries once.** `lib/integrations/errors.ts` maps HTTP status → a
+  specific sentence (401/403 → reconnect, 429 → rate limit/quota, 5xx →
+  provider outage, network errors → connectivity) and retries transient
+  failures once with backoff before surfacing them — consistently across
+  Gmail, HubSpot, and Hunter.io. A single bad domain/contact/thread inside
+  a batch (enrichment, CRM sync, reply-checking) no longer discards every
+  other item in the same batch; each collects its own `failed` list
+  instead of throwing on the first error.
+- 📚 **New docs**: `GETTING_STARTED.md` (the non-technical first-run
+  guide), `USER_GUIDE.md` (day-to-day reference), `TROUBLESHOOTING.md`
+  (every real error message this platform produces, explained),
+  `DEMO_GUIDE.md` (how to run a live demo with real accounts, never
+  fabricated data), and `BLOCKERS.md` (every remaining gap, ranked
+  Critical→Low, with a recommended fix for each).
+- 🧪 **Verified against a real local Postgres 16 instance**, same
+  discipline as every phase since 8 — a real bug was caught in the
+  process: `get_sales_metrics()`'s widened return signature couldn't
+  `CREATE OR REPLACE` over the 5-column version Phase 10 already left in
+  place, on a *genuinely fresh* migration run (001 through this sprint in
+  order), not just in re-used test-session state — fixed with an explicit
+  `DROP FUNCTION` first. `approve_task_output()`, `set_avg_deal_value()`,
+  and the pause/stop controls were each exercised as a real org owner
+  (succeeds) and an unrelated `authenticated` outsider (blocked), in both
+  directions.
+
 ## Getting started
 
 ### 1. Install dependencies
@@ -175,6 +248,7 @@ npm install
    - `supabase/migrations/012_intelligence.sql` — agent/organization/workflow intelligence, the prediction and recommendation engines, self-optimization (human-approval-required), benchmarking, anomaly detection, and the extended (`daily`/`weekly`/`monthly`) executive report
    - `supabase/migrations/013_sales_integrations.sql` — integration credential storage, the sales activity ledger + metrics function, `agent_capabilities.integration_action`, and the B2B Sales Team template updates (Prospect Research / Outreach Send / CRM Sync, CRM Agent)
    - `supabase/migrations/014_stabilization.sql` — the duplicate-execution unique index, `capability_matches_task()` + the two-pass assignment fix, the `deploy_workforce_template()` security-definer fix, integration event logging to `organization_activity`, and the five `/diagnostics` RPCs
+   - `supabase/migrations/015_campaign_experience.sql` — the human-approval-gate columns on `tasks` + `approve_task_output()`, `organizations.avg_deal_value` + `set_avg_deal_value()`, and the extended `get_sales_metrics()`
 
 ### 3. Configure environment
 
@@ -244,6 +318,10 @@ Open [http://localhost:3000](http://localhost:3000), sign up, then register your
 - **Assignment and billing are now two separate questions, not one.** `assign_best_agent_for_task()` used to pass a candidate's matched capability straight into `decide_agent_accept_task()`, which both gates capacity/status *and* checks wallet balance for that capability's cost. That conflated "is this the right agent for this task" with "can this agent currently afford to run it" — harmless while the capability match was almost never found (the old `ILIKE` matcher's bug), but actively wrong once matching started working: a fresh agent's $0 wallet made the *correct* agent lose to an unrelated, nominally-free one. Assignment now always passes a `null` capability into that call; the real balance check still happens, correctly, at execution time.
 - **A `security definer` gap can hide for a long time if local testing is too permissive.** `deploy_workforce_template()`'s missing `security definer` (see Stabilization Sprint 1 above) went undetected across Phases 9 and 10 because this project's own local-Postgres testing habit of granting broad `EXECUTE` to `authenticated` before running checks silently papered over it every time. The fix wasn't just the code change — it was re-running every migration's explicit `revoke` statements before re-testing, so the test environment's grants actually matched what a real Supabase project would have.
 - **No new architecture, tables, or business concepts were added in Stabilization Sprint 1**, per scope — the unique index, the improved matcher, the security-definer fix, and the five diagnostics RPCs all read or write tables/columns that already existed (with one additive column, `agent_executions.integration_action`, denormalized purely so the partial unique index can target it directly).
+- **Splitting outreach into draft-then-send needed no new `integration_action` and no new workflow step.** The Outreach Agent's single capability still runs through the exact same `runAgentExecution()` → `dispatchIntegrationAction()` path as every other capability — only its internal behavior changed (it stops before calling `sendEmail`). Sending is a second, separate, human-triggered action outside `agent_executions` entirely, following the exact precedent "Check Replies" and "Log a Booked Meeting" already set in Phase 10: a direct, audited action, not a capability re-run — which also sidesteps Stabilization Sprint 1's duplicate-execution guard cleanly, since there's still exactly one execution row per task.
+- **A "campaign," in the guided UI, is just the org's "Generate Leads" goal** — no new entity was introduced. Pause/Resume/Stop needed zero new schema because `organization_goals.is_paused` (Phase 6) and `setGoalStatus(..., 'failed')` (already in `lib/goals.ts`) already did exactly what Phase D asked for; this sprint's only job was surfacing them prominently instead of leaving them on the goal detail page.
+- **The guided campaign form is honest about a real capability gap, not silent about it.** Hunter.io's Domain Search (the only prospect data source this platform has) enriches a *known* domain — it cannot discover companies from an industry/size/location description, the way the ICP-driven form's framing implies. Rather than fabricate that capability, an LLM-suggested candidate-domain list (via the existing provider abstraction, no new integration) fills the gap, labeled "AI-suggested" everywhere it surfaces. Real, verified people only ever come from Hunter actually enriching a domain — pasted or suggested.
+- **No new architecture was added in the Campaign Experience Sprint either** — `/onboarding` and the Campaign Dashboard are new frontend orchestration over existing RPCs (`deploy_workforce_template`, `connect_integration`, `approve_goal_plan`, `runAgentExecution`, `get_sales_metrics`); the only new SQL surface is the human-approval-gate columns/RPC and the average-deal-value column/RPC, both additive.
 
 ## Project structure
 
@@ -258,7 +336,11 @@ app/
   api/integrations/gmail/connect  – GET: redirect into Google's real OAuth2 consent screen
   api/integrations/gmail/callback – GET: exchange code for tokens, store via connect_integration()
   api/integrations/check-replies  – POST: on-demand Gmail reply detection for an organization
+  api/campaigns/launch           – POST: create/reuse a campaign goal + plan from ICP fields
+  api/campaigns/approve-and-send  – POST: approve a drafted outreach task and send it for real
   (app)/                        – authenticated shell
+    onboarding                    – guided flow: create org & deploy workforce → connect
+                                   integrations → launch campaign, one page, real DB state
     templates                    – browse templates with live usage/success/completion metrics
     templates/[id]                – preview (agents, workflow, goals) + deploy form
     agents                      – global directory: search, filters, sort, pagination
@@ -270,8 +352,9 @@ app/
     admin/verifications         – admin-only: approve pending verification requests
     organizations               – organization directory (search by name, pagination)
     organizations/new           – organization creation
-    organizations/[id]          – dashboard: Overview / Departments / Agents / Performance /
-                                   Tasks / Workflows / Activity / Sales Pipeline / Integrations (via ?tab=)
+    organizations/[id]          – dashboard: Overview / Campaign / Departments / Agents /
+                                   Performance / Tasks / Workflows / Activity / Sales Pipeline /
+                                   Integrations / Setup Wizard (via ?tab=)
     tasks                       – work queue: My Tasks / Organization Tasks / Department Tasks,
                                    filtered by status/priority/agent/department
     tasks/new                   – task creation
@@ -316,14 +399,23 @@ components/
                                    log-a-booked-meeting form, setup wizard panel
   diagnostics                    – execution history, integration history, failures, retries,
                                    and assignment-decision panels
+  onboarding                     – the guided onboarding wizard (org/deploy/integrations/campaign,
+                                   one client component driven by real DB reads on each step)
+  campaigns                      – campaign launch form, campaign dashboard, per-stage run
+                                   button, prospects review list, drafts review + approve & send,
+                                   pause/resume/stop controls
 lib/
   providers                     – ModelProvider abstraction: OpenAI, Anthropic, local/Ollama
   integrations                   – EmailProvider/CrmProvider/ProspectProvider abstraction: Gmail
-                                   (OAuth2 + REST), HubSpot (private app token), Hunter.io (domain search)
+                                   (OAuth2 + REST), HubSpot (private app token), Hunter.io (domain
+                                   search), plus shared HTTP error classification + bounded retry
   runtime                       – execution orchestration (decision engine -> provider -> tracking;
                                    dispatches to a real integration action when a capability is
-                                   tagged for one), sales action handlers, on-demand reply checking,
+                                   tagged for one), sales action handlers (draft-only outreach),
+                                   the separate approved-send action, on-demand reply checking,
                                    AI plan generation
+  campaigns.ts                   – ICP-driven campaign launch (with AI-suggested domain fallback)
+                                   + campaign dashboard state aggregation
   supabase, types, agents/registry/organizations/tasks/agentRuntime/goals/templates/simulation/
                                    intelligence/sales/diagnostics data-access helpers
 supabase/migrations             – database schema + RLS + RPCs

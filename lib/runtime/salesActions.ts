@@ -1,6 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { getCrmProvider, getEmailProvider, getProspectProvider } from '@/lib/integrations'
 import { getProvider, ModelProviderName } from '@/lib/providers'
+import { OutreachDraft } from '@/lib/types'
 
 export type EnrichedLead = {
   name: string | null
@@ -73,9 +74,20 @@ export async function runProspectEnrichment(
 
   const provider = await getProspectProvider(supabase, params.organizationId)
   const leads: EnrichedLead[] = []
+  const failedDomains: { domain: string; error: string }[] = []
 
   for (const domain of domains) {
-    const enriched = await provider.enrichDomain(domain)
+    // One domain hitting a Hunter quota/rate-limit/network error must not
+    // discard the leads already found for every other domain in the same
+    // batch — record the failure and keep going.
+    let enriched
+    try {
+      enriched = await provider.enrichDomain(domain)
+    } catch (err) {
+      failedDomains.push({ domain, error: err instanceof Error ? err.message : 'enrichment failed' })
+      continue
+    }
+
     for (const person of enriched.people) {
       const lead: EnrichedLead = {
         name: person.name,
@@ -98,13 +110,24 @@ export async function runProspectEnrichment(
     }
   }
 
-  const output = { leads, domains_searched: domains, leads_found: leads.length }
+  if (leads.length === 0 && failedDomains.length > 0) {
+    throw new Error(`Could not enrich any of ${failedDomains.length} domain(s): ${failedDomains[0].error}`)
+  }
+
+  const output = { leads, domains_searched: domains, failed_domains: failedDomains, leads_found: leads.length }
   return { output, taskOutput: output }
 }
 
-// Outreach Agent: draft (LLM) and actually send (Gmail) a personalized
-// email to every real lead the research step found.
-export async function runEmailOutreach(
+// Outreach Agent: DRAFT ONLY. This runs as a normal capability execution
+// (runAgentExecution -> here), and deliberately never calls sendEmail —
+// the human-override requirement is that no real email leaves the
+// building until an org supervisor explicitly reviews and approves it
+// (see sendApprovedOutreach in campaignActions.ts, and the
+// requires_approval/approved_at/approved_by columns added for this).
+// Splitting "draft" from "send" this way needed no new integration_action
+// and no new workflow step — it's the same capability, same task, same
+// tasks.output column; only the behavior at the tail end changed.
+export async function runEmailOutreachDraft(
   supabase: SupabaseClient,
   params: {
     organizationId: string
@@ -120,10 +143,8 @@ export async function runEmailOutreach(
     throw new Error('No enriched leads found from an earlier "Research Prospect" step in this workflow run')
   }
 
-  const emailProvider = await getEmailProvider(supabase, params.organizationId)
   const model = getProvider(params.llmProvider)
-
-  const sent: SentEmailRecord[] = []
+  const drafts: OutreachDraft[] = []
   const failed: { email: string; error: string }[] = []
 
   for (const lead of leads) {
@@ -134,28 +155,24 @@ export async function runEmailOutreach(
         maxTokens: 300,
       })
 
-      const subject = `Quick question for ${lead.company || lead.domain}`
-      const result = await emailProvider.sendEmail({ to: lead.email, subject, body: draft.output })
-
-      const record: SentEmailRecord = { email: lead.email, name: lead.name, messageId: result.messageId, threadId: result.threadId, sentAt: new Date().toISOString() }
-      sent.push(record)
-
-      await supabase.rpc('record_sales_activity', {
-        p_org_id: params.organizationId,
-        p_activity_type: 'email_sent',
-        p_agent_id: params.agentId,
-        p_task_id: params.taskId,
-        p_contact_email: lead.email,
-        p_contact_name: lead.name,
-        p_contact_company: lead.company,
-        p_metadata: { messageId: result.messageId, threadId: result.threadId, subject },
+      drafts.push({
+        email: lead.email,
+        name: lead.name,
+        company: lead.company,
+        domain: lead.domain,
+        subject: `Quick question for ${lead.company || lead.domain}`,
+        body: draft.output,
       })
     } catch (err) {
-      failed.push({ email: lead.email, error: err instanceof Error ? err.message : 'send failed' })
+      failed.push({ email: lead.email, error: err instanceof Error ? err.message : 'draft failed' })
     }
   }
 
-  const output = { leads, sent, failed, emails_sent: sent.length }
+  if (params.taskId) {
+    await supabase.from('tasks').update({ requires_approval: true }).eq('id', params.taskId)
+  }
+
+  const output = { leads, drafts, failed, drafted: drafts.length }
   return { output, taskOutput: output }
 }
 
@@ -173,26 +190,37 @@ export async function runCrmSync(
   const crm = await getCrmProvider(supabase, params.organizationId)
   const sentByEmail = new Map(sentEmails.map((s) => [s.email, s]))
   const synced: { email: string; contactId: string; emailed: boolean }[] = []
+  const failed: { email: string; error: string }[] = []
 
   for (const lead of leads) {
-    const [firstName, ...rest] = (lead.name || '').split(' ')
-    const lastName = rest.join(' ') || undefined
+    // One contact hitting a HubSpot outage/rate-limit must not lose every
+    // other contact's sync in the same batch.
+    try {
+      const [firstName, ...rest] = (lead.name || '').split(' ')
+      const lastName = rest.join(' ') || undefined
 
-    let contactId = await crm.findContactByEmail(lead.email)
-    if (!contactId) {
-      contactId = await crm.createContact({ email: lead.email, firstName: firstName || undefined, lastName, company: lead.company, jobTitle: lead.title })
-    } else {
-      await crm.updateContact(contactId, { firstName: firstName || undefined, lastName, company: lead.company, jobTitle: lead.title })
+      let contactId = await crm.findContactByEmail(lead.email)
+      if (!contactId) {
+        contactId = await crm.createContact({ email: lead.email, firstName: firstName || undefined, lastName, company: lead.company, jobTitle: lead.title })
+      } else {
+        await crm.updateContact(contactId, { firstName: firstName || undefined, lastName, company: lead.company, jobTitle: lead.title })
+      }
+
+      const sentRecord = sentByEmail.get(lead.email)
+      if (sentRecord) {
+        await crm.logNote(contactId, `Outbound email sent via AI Workforce Network on ${sentRecord.sentAt}.`)
+      }
+
+      synced.push({ email: lead.email, contactId, emailed: !!sentRecord })
+    } catch (err) {
+      failed.push({ email: lead.email, error: err instanceof Error ? err.message : 'CRM sync failed' })
     }
-
-    const sentRecord = sentByEmail.get(lead.email)
-    if (sentRecord) {
-      await crm.logNote(contactId, `Outbound email sent via AI Workforce Network on ${sentRecord.sentAt}.`)
-    }
-
-    synced.push({ email: lead.email, contactId, emailed: !!sentRecord })
   }
 
-  const output = { synced, contacts_synced: synced.length }
+  if (synced.length === 0 && failed.length > 0) {
+    throw new Error(`Could not sync any of ${failed.length} contact(s) to HubSpot: ${failed[0].error}`)
+  }
+
+  const output = { synced, failed, contacts_synced: synced.length }
   return { output, taskOutput: output }
 }

@@ -44,3 +44,8 @@ export async function getSalesActivity(supabase: SupabaseClient, organizationId:
     .limit(limit)
   return (data as SalesActivity[]) || []
 }
+
+export async function setAvgDealValue(supabase: SupabaseClient, organizationId: string, value: number | null): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('set_avg_deal_value', { p_org_id: organizationId, p_value: value })
+  return { error: error?.message || null }
+}

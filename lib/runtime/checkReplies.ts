@@ -5,6 +5,7 @@ import { SalesActivity } from '@/lib/types'
 export type CheckRepliesResult = {
   checked: number
   newReplies: number
+  failed: number
   error: string | null
 }
 
@@ -21,7 +22,7 @@ export async function checkRepliesForOrganization(supabase: SupabaseClient, orga
     .eq('activity_type', 'email_sent')
 
   if (sentError) {
-    return { checked: 0, newReplies: 0, error: sentError.message }
+    return { checked: 0, newReplies: 0, failed: 0, error: sentError.message }
   }
 
   const { data: repliedActivities } = await supabase
@@ -34,14 +35,14 @@ export async function checkRepliesForOrganization(supabase: SupabaseClient, orga
 
   const pending = ((sentActivities as SalesActivity[]) || []).filter((a) => !alreadyReplied.has(a.metadata?.messageId))
   if (pending.length === 0) {
-    return { checked: 0, newReplies: 0, error: null }
+    return { checked: 0, newReplies: 0, failed: 0, error: null }
   }
 
   let emailProvider
   try {
     emailProvider = await getEmailProvider(supabase, organizationId)
   } catch (err) {
-    return { checked: 0, newReplies: 0, error: err instanceof Error ? err.message : 'Gmail is not connected' }
+    return { checked: 0, newReplies: 0, failed: 0, error: err instanceof Error ? err.message : 'Gmail is not connected' }
   }
 
   let crmProvider = null
@@ -52,12 +53,35 @@ export async function checkRepliesForOrganization(supabase: SupabaseClient, orga
   }
 
   let newReplies = 0
+  let failed = 0
+  let connectionBroken = false
+
   for (const activity of pending) {
+    if (connectionBroken) break
+
     const threadId = activity.metadata?.threadId as string | undefined
     const messageId = activity.metadata?.messageId as string | undefined
     if (!threadId || !messageId) continue
 
-    const reply = await emailProvider.checkReplies(threadId, messageId)
+    // One bad thread lookup (deleted thread, a transient blip) must not
+    // sink every other real reply in the same batch — this used to be an
+    // unguarded call that would abort the whole loop on the first failure.
+    let reply
+    try {
+      reply = await emailProvider.checkReplies(threadId, messageId)
+    } catch (err) {
+      failed += 1
+      const message = err instanceof Error ? err.message : 'Gmail thread lookup failed'
+      if (message.includes('reconnect') || message.includes('revoked')) {
+        // The connection itself is broken, not this one thread — record it
+        // once and stop, rather than repeating the same failure for every
+        // remaining item.
+        connectionBroken = true
+        await supabase.rpc('record_integration_error', { p_org_id: organizationId, p_provider: 'gmail', p_error: message })
+      }
+      continue
+    }
+
     if (!reply.hasReply) continue
 
     newReplies += 1
@@ -84,7 +108,7 @@ export async function checkRepliesForOrganization(supabase: SupabaseClient, orga
     }
   }
 
-  return { checked: pending.length, newReplies, error: null }
+  return { checked: pending.length - failed, newReplies, failed, error: null }
 }
 
 export async function markMeetingBooked(

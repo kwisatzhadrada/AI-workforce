@@ -10,14 +10,18 @@ export async function GET(request: NextRequest) {
   }
 
   const code = request.nextUrl.searchParams.get('code')
-  const orgId = request.nextUrl.searchParams.get('state')
+  const rawState = request.nextUrl.searchParams.get('state')
   const oauthError = request.nextUrl.searchParams.get('error')
 
-  if (!orgId) {
+  if (!rawState) {
     return NextResponse.json({ error: 'Missing state (organization id)' }, { status: 400 })
   }
+  const [orgId, from] = rawState.split('|')
+  const returnUrl = from === 'onboarding' ? `/onboarding?org=${orgId}` : `/organizations/${orgId}?tab=integrations`
+  const returnSeparator = returnUrl.includes('?') ? '&' : '?'
+
   if (oauthError || !code) {
-    return NextResponse.redirect(new URL(`/organizations/${orgId}?tab=integrations&error=${encodeURIComponent(oauthError || 'Gmail authorization was cancelled')}`, request.url))
+    return NextResponse.redirect(new URL(`${returnUrl}${returnSeparator}error=${encodeURIComponent(oauthError || 'Gmail authorization was cancelled')}`, request.url))
   }
 
   try {
@@ -31,9 +35,9 @@ export async function GET(request: NextRequest) {
     })
     if (error) throw new Error(error.message)
 
-    return NextResponse.redirect(new URL(`/organizations/${orgId}?tab=integrations&connected=gmail`, request.url))
+    return NextResponse.redirect(new URL(`${returnUrl}${returnSeparator}connected=gmail`, request.url))
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to connect Gmail'
-    return NextResponse.redirect(new URL(`/organizations/${orgId}?tab=integrations&error=${encodeURIComponent(message)}`, request.url))
+    return NextResponse.redirect(new URL(`${returnUrl}${returnSeparator}error=${encodeURIComponent(message)}`, request.url))
   }
 }
