@@ -963,7 +963,7 @@ export type OrganizationIntegration = {
   updated_at: string
 }
 
-export type SalesActivityType = 'lead_found' | 'email_sent' | 'reply_received' | 'meeting_booked'
+export type SalesActivityType = 'lead_found' | 'email_drafted' | 'email_sent' | 'reply_received' | 'meeting_booked'
 
 export type SalesActivity = {
   id: string
@@ -1053,4 +1053,43 @@ export type AssignmentDecisionRow = {
   reasoning: string
   outputs: Record<string, unknown>
   created_at: string
+}
+
+export type AnalyticsFunnel = {
+  organizations_created: number
+  workforces_deployed: number
+  campaigns_launched: number
+  emails_drafted: number
+  emails_sent: number
+  replies_received: number
+  meetings_booked: number
+}
+
+export type AnalyticsByOrganization = {
+  organization_id: string
+  organization_name: string
+  created_at: string
+  workforce_deployed: boolean
+  campaign_launched: boolean
+  emails_drafted: number
+  emails_sent: number
+  replies_received: number
+  meetings_booked: number
+}
+
+export type FeedbackType = 'bug' | 'feature_request' | 'general'
+export type FeedbackStatus = 'open' | 'in_progress' | 'resolved' | 'closed'
+
+export type UserFeedback = {
+  id: string
+  user_id: string
+  organization_id: string | null
+  feedback_type: FeedbackType
+  message: string
+  page_url: string | null
+  status: FeedbackStatus
+  admin_notes: string | null
+  created_at: string
+  updated_at: string
+  profiles?: Pick<Profile, 'id' | 'full_name'>
 }

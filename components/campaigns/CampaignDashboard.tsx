@@ -1,5 +1,6 @@
+import Link from 'next/link'
 import { CampaignState } from '@/lib/campaigns'
-import { OutreachDraft } from '@/lib/types'
+import { IntegrationProvider, OrganizationIntegration, OutreachDraft } from '@/lib/types'
 import RunStageButton from './RunStageButton'
 import ProspectsList from './ProspectsList'
 import DraftsReview from './DraftsReview'
@@ -11,6 +12,24 @@ import AvgDealValueForm from '@/components/sales/AvgDealValueForm'
 
 type Lead = { name: string | null; email: string; title: string | null; company: string | null; domain: string }
 
+const STAGE_PROVIDER: Record<'research' | 'outreach' | 'crm', { provider: IntegrationProvider; label: string }> = {
+  research: { provider: 'hunter', label: 'Hunter.io' },
+  outreach: { provider: 'gmail', label: 'Gmail' },
+  crm: { provider: 'hubspot', label: 'HubSpot' },
+}
+
+function ConnectFirstNotice({ organizationId, label }: { organizationId: string; label: string }) {
+  return (
+    <p className="text-xs text-[#8A88A8]">
+      Connect {label} to run this stage —{' '}
+      <Link href={`/organizations/${organizationId}?tab=integrations`} className="text-[#6D28D9] hover:underline">
+        go to Integrations
+      </Link>
+      .
+    </p>
+  )
+}
+
 function StageBadge({ label, tone }: { label: string; tone: 'pending' | 'ready' | 'done' | 'blocked' }) {
   const colors: Record<string, string> = {
     pending: 'text-gray-400 bg-gray-400/10 border-gray-400/20',
@@ -21,9 +40,20 @@ function StageBadge({ label, tone }: { label: string; tone: 'pending' | 'ready' 
   return <span className={`text-xs px-2 py-0.5 rounded-md border ${colors[tone]}`}>{label}</span>
 }
 
-export default function CampaignDashboard({ organizationId, state }: { organizationId: string; state: CampaignState }) {
+export default function CampaignDashboard({
+  organizationId,
+  state,
+  integrations,
+}: {
+  organizationId: string
+  state: CampaignState
+  integrations: OrganizationIntegration[]
+}) {
   const { goal, stages, metrics } = state
   if (!goal) return null
+
+  const connected = new Set(integrations.filter((i) => i.status === 'connected').map((i) => i.provider))
+  const isConnected = (stage: 'research' | 'outreach' | 'crm') => connected.has(STAGE_PROVIDER[stage].provider)
 
   const research = stages.find((s) => s.key === 'research')
   const outreach = stages.find((s) => s.key === 'outreach')
@@ -52,18 +82,25 @@ export default function CampaignDashboard({ organizationId, state }: { organizat
       <div className="bg-[#0C0D22] border border-[#3C3A58]/30 rounded-xl p-5">
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-medium text-[#EDEAF8]">1. Find & Enrich Prospects</h3>
-          <StageBadge label={researchDone ? 'Done' : research?.task ? 'Ready' : 'Not set up'} tone={researchDone ? 'done' : research?.task ? 'ready' : 'pending'} />
+          <StageBadge
+            label={researchDone ? 'Done' : !isConnected('research') ? 'Needs Hunter.io' : research?.task ? 'Ready' : 'Not set up'}
+            tone={researchDone ? 'done' : !isConnected('research') ? 'blocked' : research?.task ? 'ready' : 'pending'}
+          />
         </div>
         {research?.agentName && <p className="text-xs text-[#8A88A8] mb-2">Run by {research.agentName}</p>}
         {!researchDone && research?.task && research.agentId && research.capabilityId && (
-          <RunStageButton
-            agentId={research.agentId}
-            taskId={research.task.id}
-            capabilityId={research.capabilityId}
-            taskTitle={research.task.title}
-            taskDescription={research.task.description}
-            label="Find & Enrich Prospects"
-          />
+          isConnected('research') ? (
+            <RunStageButton
+              agentId={research.agentId}
+              taskId={research.task.id}
+              capabilityId={research.capabilityId}
+              taskTitle={research.task.title}
+              taskDescription={research.task.description}
+              label="Find & Enrich Prospects"
+            />
+          ) : (
+            <ConnectFirstNotice organizationId={organizationId} label={STAGE_PROVIDER.research.label} />
+          )
         )}
         <ProspectsList leads={leads} />
       </div>
@@ -72,21 +109,30 @@ export default function CampaignDashboard({ organizationId, state }: { organizat
       <div className="bg-[#0C0D22] border border-[#3C3A58]/30 rounded-xl p-5">
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-medium text-[#EDEAF8]">2. Draft & Send Outreach</h3>
-          <StageBadge
-            label={sent.length > 0 ? 'Sent' : drafts.length > 0 ? 'Awaiting your approval' : researchDone ? 'Ready' : 'Waiting on prospects'}
-            tone={sent.length > 0 ? 'done' : drafts.length > 0 ? 'ready' : researchDone ? 'ready' : 'pending'}
-          />
+          {(() => {
+            let label: string, tone: 'pending' | 'ready' | 'done' | 'blocked'
+            if (sent.length > 0) { label = 'Sent'; tone = 'done' }
+            else if (drafts.length > 0) { label = 'Awaiting your approval'; tone = 'ready' }
+            else if (!researchDone) { label = 'Waiting on prospects'; tone = 'pending' }
+            else if (!isConnected('outreach')) { label = 'Needs Gmail'; tone = 'blocked' }
+            else { label = 'Ready'; tone = 'ready' }
+            return <StageBadge label={label} tone={tone} />
+          })()}
         </div>
         {outreach?.agentName && <p className="text-xs text-[#8A88A8] mb-2">Run by {outreach.agentName}</p>}
         {researchDone && drafts.length === 0 && outreach?.task && outreach.agentId && outreach.capabilityId && (
-          <RunStageButton
-            agentId={outreach.agentId}
-            taskId={outreach.task.id}
-            capabilityId={outreach.capabilityId}
-            taskTitle={outreach.task.title}
-            taskDescription={outreach.task.description}
-            label="Draft Outreach Emails"
-          />
+          isConnected('outreach') ? (
+            <RunStageButton
+              agentId={outreach.agentId}
+              taskId={outreach.task.id}
+              capabilityId={outreach.capabilityId}
+              taskTitle={outreach.task.title}
+              taskDescription={outreach.task.description}
+              label="Draft Outreach Emails"
+            />
+          ) : (
+            <ConnectFirstNotice organizationId={organizationId} label={STAGE_PROVIDER.outreach.label} />
+          )
         )}
         {!researchDone && <p className="text-xs text-[#8A88A8]">Complete prospect research first.</p>}
         {outreach?.task && outreach.agentId && (
@@ -105,20 +151,24 @@ export default function CampaignDashboard({ organizationId, state }: { organizat
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-medium text-[#EDEAF8]">3. Sync to CRM</h3>
           <StageBadge
-            label={synced.length > 0 ? 'Done' : researchDone ? 'Ready' : 'Waiting on prospects'}
-            tone={synced.length > 0 ? 'done' : researchDone ? 'ready' : 'pending'}
+            label={synced.length > 0 ? 'Done' : !researchDone ? 'Waiting on prospects' : !isConnected('crm') ? 'Needs HubSpot' : 'Ready'}
+            tone={synced.length > 0 ? 'done' : !researchDone ? 'pending' : !isConnected('crm') ? 'blocked' : 'ready'}
           />
         </div>
         {crm?.agentName && <p className="text-xs text-[#8A88A8] mb-2">Run by {crm.agentName}</p>}
         {researchDone && synced.length === 0 && crm?.task && crm.agentId && crm.capabilityId && (
-          <RunStageButton
-            agentId={crm.agentId}
-            taskId={crm.task.id}
-            capabilityId={crm.capabilityId}
-            taskTitle={crm.task.title}
-            taskDescription={crm.task.description}
-            label="Sync to CRM"
-          />
+          isConnected('crm') ? (
+            <RunStageButton
+              agentId={crm.agentId}
+              taskId={crm.task.id}
+              capabilityId={crm.capabilityId}
+              taskTitle={crm.task.title}
+              taskDescription={crm.task.description}
+              label="Sync to CRM"
+            />
+          ) : (
+            <ConnectFirstNotice organizationId={organizationId} label={STAGE_PROVIDER.crm.label} />
+          )
         )}
         {synced.length > 0 && <p className="text-xs text-[#8A88A8]">{synced.length} contact(s) synced to HubSpot.</p>}
       </div>

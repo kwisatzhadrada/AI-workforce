@@ -1,14 +1,9 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { getProvider, ModelProviderName, ProviderConfigError } from '@/lib/providers'
 import { GoalPlan, OrganizationGoal, SalesMetrics, Task } from '@/lib/types'
+import { extractDomains as parseDomains } from '@/lib/utils'
 
 const CAMPAIGN_GOAL_TITLE = 'Generate Leads'
-const DOMAIN_PATTERN = /\b[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.[a-z]{2,}\b/gi
-
-function parseDomains(text: string): string[] {
-  const matches = text.match(DOMAIN_PATTERN) || []
-  return Array.from(new Set(matches.map((m) => m.toLowerCase())))
-}
 
 export type CampaignIcp = {
   targetIndustry: string
@@ -161,6 +156,11 @@ export async function launchCampaign(supabase: SupabaseClient, params: LaunchCam
 
   const { error: approveError } = await supabase.rpc('approve_goal_plan', { p_plan_id: plan.id })
   if (approveError) return { goalId: resolvedGoalId, domains, domainsSource, error: approveError.message }
+
+  // Analytics funnel event — a real campaign is now running, not just a
+  // goal row. Failure here shouldn't fail the whole launch (the campaign
+  // itself succeeded); it's a best-effort tracking call.
+  await supabase.rpc('record_campaign_launched', { p_org_id: params.organizationId, p_metadata: { domains_source: domainsSource, domain_count: domains.length } })
 
   return { goalId: resolvedGoalId, domains, domainsSource, error: null }
 }

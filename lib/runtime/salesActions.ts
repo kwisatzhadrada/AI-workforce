@@ -2,6 +2,7 @@ import { SupabaseClient } from '@supabase/supabase-js'
 import { getCrmProvider, getEmailProvider, getProspectProvider } from '@/lib/integrations'
 import { getProvider, ModelProviderName } from '@/lib/providers'
 import { OutreachDraft } from '@/lib/types'
+import { extractDomains } from '@/lib/utils'
 
 export type EnrichedLead = {
   name: string | null
@@ -22,11 +23,6 @@ export type SentEmailRecord = {
 export type SalesActionResult = {
   output: Record<string, unknown>
   taskOutput: Record<string, unknown>
-}
-
-function extractDomains(text: string): string[] {
-  const matches = text.match(/\b[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.[a-z]{2,}\b/gi) || []
-  return Array.from(new Set(matches.map((m) => m.toLowerCase())))
 }
 
 // Gathers real structured output (leads found, emails sent) from every
@@ -162,6 +158,16 @@ export async function runEmailOutreachDraft(
         domain: lead.domain,
         subject: `Quick question for ${lead.company || lead.domain}`,
         body: draft.output,
+      })
+
+      await supabase.rpc('record_sales_activity', {
+        p_org_id: params.organizationId,
+        p_activity_type: 'email_drafted',
+        p_agent_id: params.agentId,
+        p_task_id: params.taskId,
+        p_contact_email: lead.email,
+        p_contact_name: lead.name,
+        p_contact_company: lead.company,
       })
     } catch (err) {
       failed.push({ email: lead.email, error: err instanceof Error ? err.message : 'draft failed' })

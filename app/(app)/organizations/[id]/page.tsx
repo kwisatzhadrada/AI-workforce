@@ -379,10 +379,21 @@ async function SetupWizardTab({ organizationId }: { organizationId: string }) {
 
 async function CampaignTab({ organizationId }: { organizationId: string }) {
   const supabase = await createClient()
-  const state = await getCampaignState(supabase, organizationId)
+  const [state, integrations] = await Promise.all([
+    getCampaignState(supabase, organizationId),
+    getOrganizationIntegrations(supabase, organizationId),
+  ])
 
-  return state.goal ? (
-    <CampaignDashboard organizationId={organizationId} state={state} />
+  // A goal can exist with no usable campaign behind it yet — e.g. launch
+  // partially failed (goal created, plan/approval step didn't finish) or
+  // this is a "Generate Leads" goal from somewhere other than the guided
+  // launch flow. Gate on there being at least one real task, not just a
+  // goal row, so a partial failure doesn't strand the user on a
+  // permanently empty dashboard with no way to (re)launch.
+  const hasCampaign = !!state.goal && state.stages.some((s) => s.task)
+
+  return hasCampaign ? (
+    <CampaignDashboard organizationId={organizationId} state={state} integrations={integrations} />
   ) : (
     <CampaignLaunchForm organizationId={organizationId} />
   )

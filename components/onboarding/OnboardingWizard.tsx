@@ -72,9 +72,17 @@ export default function OnboardingWizard({ initialOrgId, templateId, templateNam
   }
 
   const step1Done = !!org && workforceDeployed
-  const anyIntegrationConnected = integrations.some((i) => i.status === 'connected')
-  const step2Done = anyIntegrationConnected
-  const step3Done = !!campaignState?.goal
+  // Gmail + Hunter are what the pipeline actually needs to run end to end
+  // (research and outreach); HubSpot stays optional. Gating on "any one
+  // integration" would let a HubSpot-only connection mark this step done
+  // while the first two campaign stages are still unusable.
+  const connectedProviders = new Set(integrations.filter((i) => i.status === 'connected').map((i) => i.provider))
+  const step2Done = connectedProviders.has('gmail') && connectedProviders.has('hunter')
+  // A goal can exist without a usable campaign behind it (see the same
+  // fix on the organization page's Campaign tab) — gate on real tasks
+  // existing, not just the goal row, so a partial launch failure doesn't
+  // show this step as falsely complete.
+  const step3Done = !!campaignState?.goal && campaignState.stages.some((s) => s.task)
 
   if (loading) return <p className="text-sm text-[#8A88A8]">Loading...</p>
 
@@ -122,13 +130,13 @@ export default function OnboardingWizard({ initialOrgId, templateId, templateNam
             <p className="text-sm text-[#8A88A8] mb-3">
               Connect at least Gmail and Hunter.io to run a real campaign — HubSpot is optional but recommended for CRM tracking.
             </p>
-            <IntegrationsPanel organizationId={org.id} integrations={integrations} isManager gmailReturnTo="onboarding" />
+            <IntegrationsPanel organizationId={org.id} integrations={integrations} isManager gmailReturnTo="onboarding" onChange={() => refresh(org.id)} />
           </>
         )}
       </StepShell>
 
       <StepShell number={3} title="Launch Your First Campaign" done={step3Done} locked={!step1Done || !step2Done}>
-        {org && !step3Done && <CampaignLaunchForm organizationId={org.id} />}
+        {org && !step3Done && <CampaignLaunchForm organizationId={org.id} onLaunched={() => refresh(org.id)} />}
         {org && step3Done && (
           <div className="space-y-2">
             <p className="text-sm text-[#EDEAF8]">Your campaign is live.</p>

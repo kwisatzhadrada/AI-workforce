@@ -28,12 +28,14 @@ export default function IntegrationsPanel({
   isManager,
   error,
   gmailReturnTo,
+  onChange,
 }: {
   organizationId: string
   integrations: OrganizationIntegration[]
   isManager: boolean
   error?: string
   gmailReturnTo?: 'onboarding'
+  onChange?: () => void
 }) {
   const byProvider = new Map(integrations.map((i) => [i.provider, i]))
 
@@ -56,7 +58,7 @@ export default function IntegrationsPanel({
             {status === 'connected' ? (
               <div className="flex items-center justify-between text-xs text-[#8A88A8]">
                 <span>Connected {formatTimeAgo(integration!.connected_at)}</span>
-                {isManager && <DisconnectButton organizationId={organizationId} provider={p.provider} />}
+                {isManager && <DisconnectButton organizationId={organizationId} provider={p.provider} onDisconnected={onChange} />}
               </div>
             ) : isManager ? (
               <>
@@ -76,6 +78,7 @@ export default function IntegrationsPanel({
                     helpText="Create a Private App in HubSpot (Settings → Integrations → Private Apps) with crm.objects.contacts scope."
                     helpUrl="https://developers.hubspot.com/docs/api/private-apps"
                     onConnect={(supabase, orgId, token) => connectHubSpot(supabase, orgId, token)}
+                    onConnected={onChange}
                   />
                 )}
                 {p.provider === 'hunter' && (
@@ -86,6 +89,7 @@ export default function IntegrationsPanel({
                     helpText="Free tier available — sign up and copy your API key from account settings."
                     helpUrl="https://hunter.io/api-keys"
                     onConnect={(supabase, orgId, token) => connectHunter(supabase, orgId, token)}
+                    onConnected={onChange}
                   />
                 )}
                 {status === 'error' && integration?.last_error && (

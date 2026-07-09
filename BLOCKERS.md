@@ -1,9 +1,25 @@
 # Remaining Blockers — Before Inviting Real Design Partners
 
 This is the honest list. Everything below is a real gap in the guided
-onboarding → campaign experience built this sprint, ranked by how much it
-would actually stop (or mislead) a real first-time business user. "Fixed"
-elsewhere in this sprint is not repeated here — this is what's still open.
+onboarding → campaign experience, ranked by how much it would actually
+stop (or mislead) a real first-time business user. "Fixed" elsewhere is
+not repeated here — this is what's still open.
+
+**Updated during the Customer Validation Sprint.** A real code-review
+pass (no live Supabase project was available to click through the actual
+UI — Docker isn't available in this sandbox, so a local Supabase Auth
+stack couldn't be stood up either, the same honest limitation this
+project has carried since Phase 8) found and fixed several real bugs that
+aren't repeated here since they're resolved: a dead-end Campaign tab
+when a launch partially failed; the onboarding wizard's own steps not
+recognizing a just-completed action (stale client-side state after an
+integration connect or campaign launch); campaign stage buttons offering
+to run before their required integration was connected; and — most
+seriously — the domain-parsing regex silently truncating any multi-level
+TLD (`acme.co.uk` → `acme.co`, a different, often real, domain) or any
+`www.`-prefixed domain (`www.acme.com` → `www.acme`, not even a valid
+hostname), which would have sent a real UK/Australian/etc. design
+partner's campaign after the wrong company entirely.
 
 ---
 
@@ -97,11 +113,26 @@ The user must manually click the stage's button again later.
 needs a job queue. Until then, the honest behavior is: fail clearly, let
 the human retry, which is what's built.
 
+### 7. No way to regenerate a bad batch of drafted outreach
+If a supervisor reviews the drafted emails and doesn't like them, the
+only options are approve-and-send as-is or don't send at all — there's no
+"regenerate" or in-place edit button (see #2). The underlying mechanism
+(create a new task and re-run the Draft Outreach capability on it) exists
+at the database level, but nothing in the guided UI exposes it — doing it
+today means manually creating a task via `/tasks/new`, which is exactly
+the "developer-only friction" this platform is trying to remove.
+
+**Recommended fix:** a "Regenerate Drafts" button on the Campaign
+Dashboard that creates a fresh Outreach task (reusing the same research
+leads via the existing `workflow_run_id` step-linking) and runs it
+immediately — no new architecture, just a guided-UI wrapper around
+task creation that already works from `/tasks/new`.
+
 ---
 
 ## Medium
 
-### 7. Agent wallets start at $0
+### 8. Agent wallets start at $0
 Every agent deployed from a template starts with a $0 wallet balance
 (Stabilization Sprint 1). This no longer blocks correct campaign
 assignment or execution (that coupling was deliberately removed), but it
@@ -114,7 +145,7 @@ spend tracked from day one.
 `deploy_workforce_template()`, or add a funding step to the onboarding
 wizard. A product decision, not made unilaterally this sprint.
 
-### 8. HubSpot and Hunter connect via a pasted token, not OAuth
+### 9. HubSpot and Hunter connect via a pasted token, not OAuth
 Unchanged from Phase 10: both integrations ask for a Private App
 token / API key pasted directly into the UI, rather than an OAuth consent
 flow. This is each provider's own recommended path for a single-account
@@ -126,7 +157,7 @@ paste it back, which is more friction than Gmail's one-click OAuth.
 multi-tenant, install-from-marketplace product — meaningful new work, not
 done this sprint.
 
-### 9. Credentials are stored without column-level encryption at rest
+### 10. Credentials are stored without column-level encryption at rest
 Carried over from the due-diligence report and every phase since:
 `organization_integrations.credentials` is a plain jsonb column. Treat any
 pasted token like a production secret.
@@ -139,7 +170,7 @@ partner's real, live business credentials at any real scale.
 
 ## Low
 
-### 10. AI-suggested domains have no validation that the company exists
+### 11. AI-suggested domains have no validation that the company exists
 When the LLM brainstorms candidate domains (see #1), nothing checks those
 domains resolve to a real, currently-operating company before Hunter
 tries to enrich them — a bad suggestion just produces zero Hunter results
@@ -149,7 +180,7 @@ pan out" versus "Hunter has no data for this real company."
 **Recommended fix:** low priority given #1 already needs a real fix; once
 a real firmographic API is added, this concern mostly disappears.
 
-### 11. Retry backoff is fixed, not provider-aware
+### 12. Retry backoff is fixed, not provider-aware
 The shared retry helper (`lib/integrations/errors.ts`) uses one backoff
 curve for all three providers. A provider that returns a `Retry-After`
 header (common for 429s) isn't honored — the fixed backoff might retry
@@ -157,3 +188,17 @@ too early or later than necessary.
 
 **Recommended fix:** parse and respect `Retry-After` when present; small,
 not done this sprint given its low real-world impact at current volumes.
+
+### 13. A stopped campaign shows as "failed" on the generic Goals page
+"Stop Campaign" sets the underlying `organization_goals.status` to
+`'failed'` (the only terminal, non-active status this table has) —
+correctly labeled "Campaign stopped" on the Campaign Dashboard itself, but
+a user who separately visits `/goals` will see the same goal rendered
+with a plain "failed" badge, which reads as a negative outcome rather
+than an intentional stop.
+
+**Recommended fix:** would need a new goal status value (e.g.
+`'cancelled'`) shared across every goal-consuming view — deliberately not
+done here to avoid touching shared goal-status rendering used by
+non-campaign goals too. Low impact: doesn't affect campaign functionality,
+only a label a design partner would rarely see.

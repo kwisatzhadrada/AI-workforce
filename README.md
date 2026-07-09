@@ -1,4 +1,4 @@
-# AI Workforce — B2B Sales Vertical: Real Integrations (v10, Stabilization Sprint 1, Campaign Experience Sprint)
+# AI Workforce — B2B Sales Vertical: Real Integrations (v10, Stabilization Sprint 1, Campaign Experience Sprint, Customer Validation Sprint)
 
 Give every AI worker a verifiable, discoverable identity. Built with **Next.js 16 (App Router)**, **TypeScript**, **Tailwind CSS**, and **Supabase** (Auth, Postgres).
 
@@ -222,6 +222,70 @@ without touching SQL or picking a capability from a dropdown. See
   (succeeds) and an unrelated `authenticated` outsider (blocked), in both
   directions.
 
+## Customer Validation Sprint
+
+No new platform layer, no new architecture. Goal: get this in front of 3-5
+real design partners with confidence. Docker isn't available in this
+sandbox, so a full local Supabase Auth stack couldn't be stood up to click
+through the real UI — the same honest limitation this project has carried
+since Phase 8. What was possible instead: a thorough code-level polish
+pass (found and fixed several real bugs, one of them serious), a full
+analytics funnel, a feedback system, a demo-org seed script, and design
+partner readiness docs.
+
+- 🔍 **Polish pass found real bugs, not hypothetical ones.** The domain-
+  parsing regex (used since Phase 10 to pull target domains out of a task
+  description) silently truncated any multi-level TLD — `acme.co.uk`
+  became `acme.co`, a different, often real, unrelated domain — and any
+  `www.`-prefixed domain — `www.acme.com` became `www.acme`, not even a
+  valid hostname. A real UK/Australian/etc. design partner would have had
+  their campaign silently target the wrong company. Fixed with one shared
+  `extractDomains()` in `lib/utils.ts` (both `lib/runtime/salesActions.ts`
+  and `lib/campaigns.ts` now import it instead of each keeping their own
+  copy of the bug). Also fixed: a partially-failed campaign launch used to
+  strand the user on a permanently empty Campaign tab with no way to
+  retry; the onboarding wizard's own step indicators didn't update after
+  connecting an integration or launching a campaign (client-side state
+  staleness — `router.refresh()` alone doesn't reach a client component's
+  own local state); and campaign stage buttons offered to run before their
+  required integration was even connected, producing a confusing runtime
+  error instead of a clear "connect X first" prompt.
+- 📈 **Full funnel tracking, no new ledger.** Organization created,
+  workforce deployed, campaign launched, emails drafted, emails sent,
+  replies received, meetings booked — the first three reuse
+  `organization_activity` (a new trigger on `organizations`, a new log
+  call inside `deploy_workforce_template()`, and a new self-authorizing
+  `record_campaign_launched()` RPC); "emails drafted" is one more
+  `sales_activities.activity_type`, logged the same way `lead_found`/
+  `email_sent` already are. A new admin-only `/analytics` page shows both
+  the network-wide funnel and a per-organization breakdown — which design
+  partners actually progressed, and where each one is stuck.
+- 💬 **Feedback system** — a floating widget on every authenticated page
+  (bug / feature request / general feedback, auto-capturing the page
+  URL), a new `user_feedback` table (RLS: submitters see their own,
+  admins see everyone's, only admins can change status), and an admin
+  inbox at `/admin/feedback`.
+- 🎭 **`scripts/seed_demo_org.sql`** — spins up a real demo organization,
+  a real deployed B2B Sales Team workforce, and a real campaign structure
+  in one script run, using the exact same `deploy_workforce_template()`
+  and goal/plan/task mechanisms the guided onboarding flow uses. It does
+  not fabricate any business outcome — no leads/sends/replies/meetings are
+  inserted; the sample domains are clearly labeled as placeholders to
+  replace before actually enriching.
+- 📋 **`SUPPORT_PROCESS.md`** and **`SUCCESS_CRITERIA.md`** — how a
+  design partner gets help and how fast, and exactly what "this pilot
+  worked" means in checkable terms (per-partner and cohort-level bars),
+  rather than a vague impression. `BLOCKERS.md` updated with every new
+  finding from this sprint's polish pass.
+- 🧪 **Verified the same way as every prior sprint** — every migration
+  (001 through this sprint, 16 total) applied in order against a
+  genuinely fresh local Postgres 16 instance with no errors;
+  `record_campaign_launched()`, the analytics RPCs, and the feedback
+  table's RLS were each exercised as a real org owner/admin (succeeds)
+  and an unrelated outsider (blocked), in both directions; the demo seed
+  script was run end to end and its funnel events confirmed in
+  `organization_activity`.
+
 ## Getting started
 
 ### 1. Install dependencies
@@ -249,6 +313,7 @@ npm install
    - `supabase/migrations/013_sales_integrations.sql` — integration credential storage, the sales activity ledger + metrics function, `agent_capabilities.integration_action`, and the B2B Sales Team template updates (Prospect Research / Outreach Send / CRM Sync, CRM Agent)
    - `supabase/migrations/014_stabilization.sql` — the duplicate-execution unique index, `capability_matches_task()` + the two-pass assignment fix, the `deploy_workforce_template()` security-definer fix, integration event logging to `organization_activity`, and the five `/diagnostics` RPCs
    - `supabase/migrations/015_campaign_experience.sql` — the human-approval-gate columns on `tasks` + `approve_task_output()`, `organizations.avg_deal_value` + `set_avg_deal_value()`, and the extended `get_sales_metrics()`
+   - `supabase/migrations/016_customer_validation.sql` — the analytics funnel events (`organization_created` trigger, `workforce_deployed` logging, `record_campaign_launched()`, the `email_drafted` activity type), the two admin-only analytics RPCs, and the `user_feedback` table + RLS
 
 ### 3. Configure environment
 
@@ -322,6 +387,10 @@ Open [http://localhost:3000](http://localhost:3000), sign up, then register your
 - **A "campaign," in the guided UI, is just the org's "Generate Leads" goal** — no new entity was introduced. Pause/Resume/Stop needed zero new schema because `organization_goals.is_paused` (Phase 6) and `setGoalStatus(..., 'failed')` (already in `lib/goals.ts`) already did exactly what Phase D asked for; this sprint's only job was surfacing them prominently instead of leaving them on the goal detail page.
 - **The guided campaign form is honest about a real capability gap, not silent about it.** Hunter.io's Domain Search (the only prospect data source this platform has) enriches a *known* domain — it cannot discover companies from an industry/size/location description, the way the ICP-driven form's framing implies. Rather than fabricate that capability, an LLM-suggested candidate-domain list (via the existing provider abstraction, no new integration) fills the gap, labeled "AI-suggested" everywhere it surfaces. Real, verified people only ever come from Hunter actually enriching a domain — pasted or suggested.
 - **No new architecture was added in the Campaign Experience Sprint either** — `/onboarding` and the Campaign Dashboard are new frontend orchestration over existing RPCs (`deploy_workforce_template`, `connect_integration`, `approve_goal_plan`, `runAgentExecution`, `get_sales_metrics`); the only new SQL surface is the human-approval-gate columns/RPC and the average-deal-value column/RPC, both additive.
+- **A shared domain parser exists so a fix only ever needs to happen once.** `lib/runtime/salesActions.ts` and `lib/campaigns.ts` used to each keep their own copy of the same domain-extraction regex — meaning the multi-level-TLD/`www.`-prefix truncation bug (see the Customer Validation Sprint notes above) would have needed fixing twice, and easily could have been fixed in only one place and missed in the other. `extractDomains()` now lives once in `lib/utils.ts`; both callers import it.
+- **Client-side state staleness is a real, recurring risk whenever a component known to work standalone gets reused inside another client component with its own local state.** `IntegrationsPanel` and `CampaignLaunchForm` both call `router.refresh()` on success, which is correctly sufficient when they're rendered directly inside a server-component route (the organization page) — but `/onboarding` wraps both in a client component (`OnboardingWizard`) that fetches its own state via the browser client (needed so a Gmail OAuth redirect doesn't lose wizard progress). `router.refresh()` re-fetches server props; it does not touch a sibling client component's local state. The fix (optional `onChange`/`onConnected`/`onDisconnected`/`onLaunched` callback props, additive and backward compatible for every other existing caller) is a pattern worth remembering for any future reuse of these components in a new client-side context.
+- **Analytics funnel events reuse two existing ledgers, not a new one.** Organization/workforce/campaign events go through `organization_activity` (a new trigger + two new log call sites + one new self-authorizing RPC); "emails drafted" is one more `sales_activities.activity_type`, logged exactly like `lead_found`/`email_sent` already are. `get_analytics_funnel()`/`get_analytics_by_organization()` are read-only aggregations over data that already exists.
+- **Feedback needed one new table, not a new subsystem.** `user_feedback` follows the exact RLS shape already established elsewhere in this schema (submitter sees their own via a straightforward `user_id = auth.uid()` policy; admin sees everything via `is_admin()`; only admins can update status) — no RPC wrapper needed since the RLS policies alone are sufficient, the same pattern `task_reviews` already uses.
 
 ## Project structure
 
@@ -374,6 +443,10 @@ app/
                                    Recommendations/Anomalies/Reports tabs
     diagnostics                   – admin-only: execution history, integration history,
                                    failures, retries, assignment decisions
+    analytics                     – admin-only: network-wide funnel + per-organization
+                                   breakdown (org created/workforce deployed/campaign
+                                   launched/emails drafted+sent/replies/meetings)
+    admin/feedback                 – admin-only: bug/feature-request/feedback inbox
 components/
   nav                           – top nav
   agents                        – directory controls, agent card, badges, follow button,
@@ -404,6 +477,9 @@ components/
   campaigns                      – campaign launch form, campaign dashboard, per-stage run
                                    button, prospects review list, drafts review + approve & send,
                                    pause/resume/stop controls
+  analytics                      – funnel panel, per-organization table
+  feedback                       – floating feedback widget (every authenticated page),
+                                   admin status-change control
 lib/
   providers                     – ModelProvider abstraction: OpenAI, Anthropic, local/Ollama
   integrations                   – EmailProvider/CrmProvider/ProspectProvider abstraction: Gmail
@@ -416,8 +492,13 @@ lib/
                                    AI plan generation
   campaigns.ts                   – ICP-driven campaign launch (with AI-suggested domain fallback)
                                    + campaign dashboard state aggregation
+  analytics.ts                   – funnel + per-organization analytics reads
+  feedback.ts                    – submit/list/update feedback
   supabase, types, agents/registry/organizations/tasks/agentRuntime/goals/templates/simulation/
                                    intelligence/sales/diagnostics data-access helpers
+scripts/
+  seed_demo_org.sql              – spins up a real demo organization, workforce, and
+                                   campaign structure via the same RPCs the app uses
 supabase/migrations             – database schema + RLS + RPCs
 middleware.ts                   – route protection
 ```

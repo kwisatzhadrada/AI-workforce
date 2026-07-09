@@ -24,9 +24,27 @@ demo (e.g. well-known SaaS companies with public "About" pages). Do not
 demo against a real prospect list you haven't gotten consent to email —
 outreach in this demo sends *real* email.
 
+## Fast path: `scripts/seed_demo_org.sql`
+
+Instead of clicking through onboarding every time, run
+`scripts/seed_demo_org.sql` once (in the Supabase SQL editor, after
+replacing `DEMO_USER_ID` with a real signed-up demo user's `auth.users.id`)
+to instantly get a demo organization named "Acme Demo Co" with a full B2B
+Sales Team workforce deployed and a campaign already created — the exact
+same real mechanisms (`deploy_workforce_template()`, a real goal/plan/
+tasks) the guided onboarding flow uses, just without the clicking. It
+does **not** fabricate any business outcome data — no leads, sends,
+replies, or meetings are inserted; the Research Prospect step's domains
+are clearly labeled `(SAMPLE domains — replace with real target companies
+before running)`. Connect real integrations for the new organization,
+replace the sample domains with real ones (or clear them and use the
+Campaign tab's AI-suggestion path), and you're at the same starting point
+as the manual walkthrough below — just faster to reset between demos.
+
 ## Running the demo
 
-1. Sign up for a fresh account (or use an existing demo account).
+1. Sign up for a fresh account (or use an existing demo account) — or run
+   the seed script above and skip straight to step 4.
 2. Click **Get Started**.
 3. **Step 1:** Name the organization something clearly demo-labeled, e.g.
    "Acme Demo Co" — this avoids any confusion with a real customer

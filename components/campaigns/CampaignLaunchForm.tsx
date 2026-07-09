@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-export default function CampaignLaunchForm({ organizationId }: { organizationId: string }) {
+export default function CampaignLaunchForm({ organizationId, onLaunched }: { organizationId: string; onLaunched?: () => void }) {
   const router = useRouter()
   const [targetIndustry, setTargetIndustry] = useState('')
   const [companySize, setCompanySize] = useState('')
@@ -38,7 +38,14 @@ export default function CampaignLaunchForm({ organizationId }: { organizationId:
         ? `Campaign launched with ${body.domains.length} AI-suggested candidate domains — review them on the Research step before trusting the results.`
         : `Campaign launched with ${body.domains.length} target domain(s).`
     )
+    // router.refresh() re-fetches this route's server data, which is
+    // enough when this form renders on the organization page — but
+    // /onboarding wraps this in a client component with its own local
+    // state (so a Gmail OAuth redirect doesn't lose progress), and
+    // router.refresh() alone doesn't reach that state. onLaunched lets
+    // the parent re-fetch its own view of the campaign explicitly.
     router.refresh()
+    onLaunched?.()
   }
 
   return (

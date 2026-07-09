@@ -11,6 +11,7 @@ export default function TokenConnectForm({
   helpText,
   helpUrl,
   onConnect,
+  onConnected,
 }: {
   organizationId: string
   label: string
@@ -18,6 +19,7 @@ export default function TokenConnectForm({
   helpText: string
   helpUrl: string
   onConnect: (supabase: ReturnType<typeof createClient>, organizationId: string, token: string) => Promise<{ error: string | null }>
+  onConnected?: () => void
 }) {
   const supabase = createClient()
   const router = useRouter()
@@ -34,6 +36,7 @@ export default function TokenConnectForm({
     if (error) { setError(error); return }
     setToken('')
     router.refresh()
+    onConnected?.()
   }
 
   return (

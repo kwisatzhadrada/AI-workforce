@@ -6,7 +6,15 @@ import { createClient } from '@/lib/supabase/client'
 import { disconnectIntegration } from '@/lib/sales'
 import { IntegrationProvider } from '@/lib/types'
 
-export default function DisconnectButton({ organizationId, provider }: { organizationId: string; provider: IntegrationProvider }) {
+export default function DisconnectButton({
+  organizationId,
+  provider,
+  onDisconnected,
+}: {
+  organizationId: string
+  provider: IntegrationProvider
+  onDisconnected?: () => void
+}) {
   const supabase = createClient()
   const router = useRouter()
   const [saving, setSaving] = useState(false)
@@ -16,6 +24,7 @@ export default function DisconnectButton({ organizationId, provider }: { organiz
     await disconnectIntegration(supabase, organizationId, provider)
     setSaving(false)
     router.refresh()
+    onDisconnected?.()
   }
 
   return (

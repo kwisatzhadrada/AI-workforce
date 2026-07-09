@@ -305,3 +305,19 @@ export function getSalesActivityLabel(type: string): string {
     default: return 'Activity'
   }
 }
+
+// Shared by lib/runtime/salesActions.ts and lib/campaigns.ts — a single
+// definition so a fix only has to happen once. The trailing TLD group
+// uses `+` (one or more `.label` repeats), not a single `\.[a-z]{2,}` —
+// the earlier single-group version silently truncated any multi-level
+// TLD (acme.co.uk -> "acme.co", a different, often real, unrelated
+// domain) and any www-prefixed domain (www.acme.com -> "www.acme", not
+// even a valid hostname). A real design partner in the UK/Australia/etc.
+// would have had their campaign silently target the wrong company.
+const DOMAIN_PATTERN = /\b[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z]{2,})+\b/gi
+
+export function extractDomains(text: string): string[] {
+  const matches = text.match(DOMAIN_PATTERN) || []
+  const normalized = matches.map((m) => m.toLowerCase().replace(/^www\./, ''))
+  return Array.from(new Set(normalized))
+}

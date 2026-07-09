@@ -113,6 +113,22 @@ export default function Nav({ profile }: { profile: Profile }) {
               Diagnostics
             </Link>
           )}
+          {profile.is_admin && (
+            <Link
+              href="/analytics"
+              className={`text-sm font-medium ${pathname.startsWith('/analytics') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
+            >
+              Analytics
+            </Link>
+          )}
+          {profile.is_admin && (
+            <Link
+              href="/admin/feedback"
+              className={`text-sm font-medium ${pathname.startsWith('/admin/feedback') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
+            >
+              Feedback
+            </Link>
+          )}
           <div className="w-8 h-8 rounded-full bg-[#6D28D9] flex items-center justify-center text-xs font-semibold text-white">
             {getInitials(profile.full_name)}
           </div>
