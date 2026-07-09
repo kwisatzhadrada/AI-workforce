@@ -1,4 +1,4 @@
-# AI Workforce — B2B Sales Vertical: Real Integrations (v10, Stabilization Sprint 1, Campaign Experience Sprint, Customer Validation Sprint)
+# AI Workforce — B2B Sales Vertical: Real Integrations (v10, Stabilization Sprint 1, Campaign Experience Sprint, Customer Validation Sprint, Design Partner Sprint)
 
 Give every AI worker a verifiable, discoverable identity. Built with **Next.js 16 (App Router)**, **TypeScript**, **Tailwind CSS**, and **Supabase** (Auth, Postgres).
 
@@ -286,6 +286,75 @@ partner readiness docs.
   script was run end to end and its funnel events confirmed in
   `organization_activity`.
 
+## Design Partner Sprint
+
+No new platform layer, no new workforce types, no new architecture.
+Objective: get 3-5 real businesses using the platform — this sprint
+audited every screen, tracked the exact onboarding funnel requested, built
+support tooling, and ran real-world persona testing (agency, recruiter,
+SaaS founder) rather than adding features. See
+`DESIGN_PARTNER_READINESS_REPORT.md` for the full Critical/High/Medium
+findings and `PERSONA_TESTING.md` / `USER_JOURNEY_REVIEW.md` for how they
+were found.
+
+- 🧭 **Nav simplified from 9-15 flat links down to 4 direct items + two
+  grouped dropdowns.** Six admin-only nav links (Admin, System Health,
+  Intelligence, Diagnostics, Analytics, Feedback) had been added one at a
+  time across four separate sprints, each reasoned about in isolation,
+  never revisited as a whole — collapsed into one "Admin" dropdown; the
+  six power-user links (Agents, Rankings, Templates, Goals, Tasks,
+  Executions) collapsed into one "Workspace" dropdown. Nothing was
+  removed or made unreachable — a design partner's real journey (Get
+  Started → Organizations → Messages) is no longer competing for
+  attention with six other concepts on every page.
+- 📊 **Onboarding funnel tracking the mission's exact seven stages** —
+  Account Created, Organization Created, Workforce Deployed, Integrations
+  Connected, Campaign Created, Campaign Approved, First Email Sent — each
+  counted as distinct organizations reaching that stage (not raw events),
+  so a drop-off percentage between stages is actually meaningful. Reuses
+  `organization_activity`/`sales_activities`; the only genuinely new
+  signal is `campaign_launched`/`task_output_approved` distinctions
+  already logged by prior sprints, just newly aggregated this way.
+- 🎛️ **Design Partner Dashboard** — a "right now" snapshot (active
+  organizations, connected integrations, active campaigns, emails sent,
+  replies received, meetings booked), distinct from the historical
+  funnel above, both on `/analytics`.
+- 🛟 **Support tooling**: `/help/errors` (every error message this
+  platform actually produces, in-app, kept in sync with
+  `TROUBLESHOOTING.md`); `/admin/support` (search an organization, see
+  its full chronological activity timeline unifying organization events,
+  sales pipeline events, and assignment/completion decisions into one
+  feed — previously three separate queries a support person would have
+  had to mentally interleave by hand); a one-click JSON debug export per
+  organization with credentials automatically stripped
+  (`get_organization_debug_export()`).
+- 🔍 **Persona testing found a genuinely important, verifiable gap**:
+  checked directly against the seed data, zero of the Recruiting Team,
+  Customer Support Team, Research Team, or Content Marketing Team
+  templates' capabilities carry an `integration_action` — only the B2B
+  Sales Team vertical was ever wired to a real external system. A
+  recruiter or support team deploying any other template would get
+  generative text, not real business outcomes. This is the headline
+  finding of `DESIGN_PARTNER_READINESS_REPORT.md`: this platform is ready
+  for B2B-sales-shaped design partners, not "AI Workforce Network,
+  general purpose" as the nav framing implies.
+- 🏢 **Also found via persona testing**: no organization-switching UX
+  anywhere in the guided flow — an agency managing multiple clients has
+  to fall back to the generic `/organizations` directory; and Google
+  Workspace admins can block the Gmail OAuth consent flow for
+  sensitive scopes, a real friction point now documented in
+  `TROUBLESHOOTING.md` and `/help/errors` but outside this platform's
+  control to fix.
+- 🧪 **Verified against a genuinely fresh local Postgres 16 instance**
+  (17 migrations total, no errors) — a real bug was caught in the
+  process: `get_organization_debug_export()`'s executions subquery
+  originally used `select *` across a join of two tables that both have
+  an `id` column, producing an ambiguous-column error the first time it
+  was actually run, not just reviewed. Every new RPC (`get_onboarding_
+  funnel`, `get_platform_overview`, `get_organization_debug_export`,
+  `get_organization_timeline`) was exercised as an admin/org-member
+  (succeeds) and an unrelated outsider (blocked), in both directions.
+
 ## Getting started
 
 ### 1. Install dependencies
@@ -314,6 +383,7 @@ npm install
    - `supabase/migrations/014_stabilization.sql` — the duplicate-execution unique index, `capability_matches_task()` + the two-pass assignment fix, the `deploy_workforce_template()` security-definer fix, integration event logging to `organization_activity`, and the five `/diagnostics` RPCs
    - `supabase/migrations/015_campaign_experience.sql` — the human-approval-gate columns on `tasks` + `approve_task_output()`, `organizations.avg_deal_value` + `set_avg_deal_value()`, and the extended `get_sales_metrics()`
    - `supabase/migrations/016_customer_validation.sql` — the analytics funnel events (`organization_created` trigger, `workforce_deployed` logging, `record_campaign_launched()`, the `email_drafted` activity type), the two admin-only analytics RPCs, and the `user_feedback` table + RLS
+   - `supabase/migrations/017_design_partner_sprint.sql` — `get_onboarding_funnel()`, the extended `get_analytics_by_organization()` (integrations connected/campaign approved), `get_platform_overview()`, `get_organization_debug_export()`, and `get_organization_timeline()`
 
 ### 3. Configure environment
 
@@ -443,12 +513,17 @@ app/
                                    Recommendations/Anomalies/Reports tabs
     diagnostics                   – admin-only: execution history, integration history,
                                    failures, retries, assignment decisions
-    analytics                     – admin-only: network-wide funnel + per-organization
-                                   breakdown (org created/workforce deployed/campaign
-                                   launched/emails drafted+sent/replies/meetings)
+    analytics                     – admin-only: platform overview (right-now snapshot),
+                                   onboarding funnel with drop-off, network-wide sales funnel,
+                                   per-organization breakdown
     admin/feedback                 – admin-only: bug/feature-request/feedback inbox
+    admin/support                  – admin-only: search an organization, see its full
+                                   activity timeline, export its state as JSON
+    help/errors                    – every error message this platform produces, explained
 components/
-  nav                           – top nav
+  nav                           – top nav (Workspace + Admin dropdowns collapse the
+                                   power-user/admin-only links; direct items are just
+                                   Get Started / Organizations / Messages)
   agents                        – directory controls, agent card, badges, follow button,
                                    portfolio, activity feed, category picker, verification panel,
                                    capabilities panel, memory panel
@@ -477,9 +552,11 @@ components/
   campaigns                      – campaign launch form, campaign dashboard, per-stage run
                                    button, prospects review list, drafts review + approve & send,
                                    pause/resume/stop controls
-  analytics                      – funnel panel, per-organization table
+  analytics                      – platform overview panel, onboarding funnel panel (with
+                                   drop-off), sales funnel panel, per-organization table
   feedback                       – floating feedback widget (every authenticated page),
                                    admin status-change control
+  support                        – unified activity timeline feed
 lib/
   providers                     – ModelProvider abstraction: OpenAI, Anthropic, local/Ollama
   integrations                   – EmailProvider/CrmProvider/ProspectProvider abstraction: Gmail
@@ -492,8 +569,12 @@ lib/
                                    AI plan generation
   campaigns.ts                   – ICP-driven campaign launch (with AI-suggested domain fallback)
                                    + campaign dashboard state aggregation
-  analytics.ts                   – funnel + per-organization analytics reads
+  analytics.ts                   – onboarding funnel, platform overview, sales funnel,
+                                   per-organization analytics reads
   feedback.ts                    – submit/list/update feedback
+  support.ts                     – per-organization debug export + activity timeline reads
+  errorReference.ts               – structured data behind /help/errors, kept in sync with
+                                   TROUBLESHOOTING.md
   supabase, types, agents/registry/organizations/tasks/agentRuntime/goals/templates/simulation/
                                    intelligence/sales/diagnostics data-access helpers
 scripts/

@@ -29,6 +29,18 @@ If you previously revoked this app's access at
 [myaccount.google.com/permissions](https://myaccount.google.com/permissions),
 reconnect from scratch rather than just re-clicking "Connect."
 
+## Google's consent screen shows "This app is blocked" or an admin-policy error, not the normal consent screen
+
+This isn't a bug in this platform — it means the Gmail account belongs to
+a **Google Workspace** domain whose admin restricts which third-party
+apps can request sensitive scopes (`gmail.send` is exactly this kind of
+scope), and this app hasn't been allowlisted for that domain.
+
+**Fix:** the Workspace admin needs to either allowlist this OAuth client
+in the Google Admin Console (Security → API Controls → App Access
+Control), or the design partner should connect a personal Gmail account
+instead (not a Workspace-managed one) for the pilot.
+
 ## "X rate limit or quota exceeded (429) — wait a few minutes before
 ## retrying, or check your X plan's usage limits."
 

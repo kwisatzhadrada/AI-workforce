@@ -5,6 +5,27 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Profile } from '@/lib/types'
 import { getInitials } from '@/lib/utils'
+import NavDropdown from './NavDropdown'
+
+const WORKSPACE_ITEMS = [
+  { href: '/agents', label: 'Agents' },
+  { href: '/agents/top', label: 'Rankings' },
+  { href: '/templates', label: 'Templates' },
+  { href: '/goals', label: 'Goals' },
+  { href: '/tasks', label: 'Tasks' },
+  { href: '/executions', label: 'Executions' },
+  { href: '/help/errors', label: 'Error Reference' },
+]
+
+const ADMIN_ITEMS = [
+  { href: '/admin/verifications', label: 'Verifications' },
+  { href: '/system-health', label: 'System Health' },
+  { href: '/intelligence', label: 'Intelligence' },
+  { href: '/diagnostics', label: 'Diagnostics' },
+  { href: '/analytics', label: 'Analytics' },
+  { href: '/admin/feedback', label: 'Feedback' },
+  { href: '/admin/support', label: 'Support Tools' },
+]
 
 export default function Nav({ profile }: { profile: Profile }) {
   const pathname = usePathname()
@@ -16,6 +37,9 @@ export default function Nav({ profile }: { profile: Profile }) {
     router.push('/login')
     router.refresh()
   }
+
+  const workspaceActive = WORKSPACE_ITEMS.some((i) => pathname.startsWith(i.href)) || pathname.startsWith('/agent/')
+  const adminActive = ADMIN_ITEMS.some((i) => pathname.startsWith(i.href))
 
   return (
     <nav className="border-b border-[#3C3A58]/30 bg-[#0C0D22]">
@@ -34,46 +58,10 @@ export default function Nav({ profile }: { profile: Profile }) {
             Get Started
           </Link>
           <Link
-            href="/agents"
-            className={`text-sm font-medium ${pathname === '/agents' || pathname.startsWith('/agent/') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
-          >
-            Agents
-          </Link>
-          <Link
-            href="/agents/top"
-            className={`text-sm font-medium ${pathname.startsWith('/agents/top') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
-          >
-            Rankings
-          </Link>
-          <Link
-            href="/templates"
-            className={`text-sm font-medium ${pathname.startsWith('/templates') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
-          >
-            Templates
-          </Link>
-          <Link
             href="/organizations"
             className={`text-sm font-medium ${pathname.startsWith('/organizations') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
           >
             Organizations
-          </Link>
-          <Link
-            href="/goals"
-            className={`text-sm font-medium ${pathname.startsWith('/goals') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
-          >
-            Goals
-          </Link>
-          <Link
-            href="/tasks"
-            className={`text-sm font-medium ${pathname.startsWith('/tasks') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
-          >
-            Tasks
-          </Link>
-          <Link
-            href="/executions"
-            className={`text-sm font-medium ${pathname.startsWith('/executions') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
-          >
-            Executions
           </Link>
           <Link
             href="/messages"
@@ -81,54 +69,8 @@ export default function Nav({ profile }: { profile: Profile }) {
           >
             Messages
           </Link>
-          {profile.is_admin && (
-            <Link
-              href="/admin/verifications"
-              className={`text-sm font-medium ${pathname.startsWith('/admin') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
-            >
-              Admin
-            </Link>
-          )}
-          {profile.is_admin && (
-            <Link
-              href="/system-health"
-              className={`text-sm font-medium ${pathname.startsWith('/system-health') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
-            >
-              System Health
-            </Link>
-          )}
-          {profile.is_admin && (
-            <Link
-              href="/intelligence"
-              className={`text-sm font-medium ${pathname.startsWith('/intelligence') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
-            >
-              Intelligence
-            </Link>
-          )}
-          {profile.is_admin && (
-            <Link
-              href="/diagnostics"
-              className={`text-sm font-medium ${pathname.startsWith('/diagnostics') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
-            >
-              Diagnostics
-            </Link>
-          )}
-          {profile.is_admin && (
-            <Link
-              href="/analytics"
-              className={`text-sm font-medium ${pathname.startsWith('/analytics') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
-            >
-              Analytics
-            </Link>
-          )}
-          {profile.is_admin && (
-            <Link
-              href="/admin/feedback"
-              className={`text-sm font-medium ${pathname.startsWith('/admin/feedback') ? 'text-[#EDEAF8]' : 'text-[#8A88A8] hover:text-[#EDEAF8]'}`}
-            >
-              Feedback
-            </Link>
-          )}
+          <NavDropdown label="Workspace" items={WORKSPACE_ITEMS} active={workspaceActive} />
+          {profile.is_admin && <NavDropdown label="Admin" items={ADMIN_ITEMS} active={adminActive} />}
           <div className="w-8 h-8 rounded-full bg-[#6D28D9] flex items-center justify-center text-xs font-semibold text-white">
             {getInitials(profile.full_name)}
           </div>

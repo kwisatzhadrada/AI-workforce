@@ -1070,11 +1070,39 @@ export type AnalyticsByOrganization = {
   organization_name: string
   created_at: string
   workforce_deployed: boolean
+  integrations_connected: boolean
   campaign_launched: boolean
+  campaign_approved: boolean
   emails_drafted: number
   emails_sent: number
   replies_received: number
   meetings_booked: number
+}
+
+export type OnboardingFunnel = {
+  accounts_created: number
+  organizations_created: number
+  workforces_deployed: number
+  integrations_connected: number
+  campaigns_created: number
+  campaigns_approved: number
+  first_email_sent: number
+}
+
+export type PlatformOverview = {
+  active_organizations: number
+  connected_integrations: number
+  active_campaigns: number
+  emails_sent: number
+  replies_received: number
+  meetings_booked: number
+}
+
+export type OrganizationTimelineEvent = {
+  source: 'organization' | 'sales' | 'decision'
+  event_type: string
+  detail: Record<string, unknown>
+  created_at: string
 }
 
 export type FeedbackType = 'bug' | 'feature_request' | 'general'

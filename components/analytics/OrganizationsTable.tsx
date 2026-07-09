@@ -20,7 +20,9 @@ export default function OrganizationsTable({ rows }: { rows: AnalyticsByOrganiza
                 <th className="py-1.5 pr-3">Organization</th>
                 <th className="py-1.5 pr-3">Created</th>
                 <th className="py-1.5 pr-3">Workforce</th>
+                <th className="py-1.5 pr-3">Integrations</th>
                 <th className="py-1.5 pr-3">Campaign</th>
+                <th className="py-1.5 pr-3">Approved</th>
                 <th className="py-1.5 pr-3 text-right">Drafted</th>
                 <th className="py-1.5 pr-3 text-right">Sent</th>
                 <th className="py-1.5 pr-3 text-right">Replies</th>
@@ -37,7 +39,9 @@ export default function OrganizationsTable({ rows }: { rows: AnalyticsByOrganiza
                   </td>
                   <td className="py-1.5 pr-3 text-[#8A88A8]">{formatTimeAgo(r.created_at)}</td>
                   <td className="py-1.5 pr-3"><Check value={r.workforce_deployed} /></td>
+                  <td className="py-1.5 pr-3"><Check value={r.integrations_connected} /></td>
                   <td className="py-1.5 pr-3"><Check value={r.campaign_launched} /></td>
+                  <td className="py-1.5 pr-3"><Check value={r.campaign_approved} /></td>
                   <td className="py-1.5 pr-3 text-right tabular-nums text-[#EDEAF8]">{r.emails_drafted}</td>
                   <td className="py-1.5 pr-3 text-right tabular-nums text-[#EDEAF8]">{r.emails_sent}</td>
                   <td className="py-1.5 pr-3 text-right tabular-nums text-[#EDEAF8]">{r.replies_received}</td>

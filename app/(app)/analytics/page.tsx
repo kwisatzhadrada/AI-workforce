@@ -1,7 +1,9 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getAnalyticsByOrganization, getAnalyticsFunnel } from '@/lib/analytics'
+import { getAnalyticsByOrganization, getAnalyticsFunnel, getOnboardingFunnel, getPlatformOverview } from '@/lib/analytics'
 import FunnelPanel from '@/components/analytics/FunnelPanel'
+import OnboardingFunnelPanel from '@/components/analytics/OnboardingFunnelPanel'
+import PlatformOverviewPanel from '@/components/analytics/PlatformOverviewPanel'
 import OrganizationsTable from '@/components/analytics/OrganizationsTable'
 
 export const dynamic = 'force-dynamic'
@@ -14,7 +16,9 @@ export default async function AnalyticsPage() {
   const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single()
   if (!profile?.is_admin) redirect('/agents')
 
-  const [funnel, organizations] = await Promise.all([
+  const [overview, onboardingFunnel, salesFunnel, organizations] = await Promise.all([
+    getPlatformOverview(supabase),
+    getOnboardingFunnel(supabase),
     getAnalyticsFunnel(supabase),
     getAnalyticsByOrganization(supabase),
   ])
@@ -24,12 +28,14 @@ export default async function AnalyticsPage() {
       <div>
         <h1 className="font-['Space_Grotesk'] text-2xl font-bold">Analytics</h1>
         <p className="text-[#8A88A8] text-sm mt-1">
-          Real usage across every organization — organizations created, workforces deployed, campaigns launched,
-          and the real sales pipeline they produced.
+          Design partner dashboard: who&apos;s active right now, where onboarding drops off, and the real sales
+          pipeline every organization produced.
         </p>
       </div>
 
-      <FunnelPanel funnel={funnel} />
+      <PlatformOverviewPanel overview={overview} />
+      <OnboardingFunnelPanel funnel={onboardingFunnel} />
+      <FunnelPanel funnel={salesFunnel} />
       <OrganizationsTable rows={organizations} />
     </div>
   )
