@@ -1,8 +1,9 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getAnalyticsByOrganization, getAnalyticsFunnel, getOnboardingFunnel, getPlatformOverview } from '@/lib/analytics'
+import { getAnalyticsByOrganization, getAnalyticsFunnel, getOnboardingFunnel, getPlatformOverview, getProductAnalyticsFunnel } from '@/lib/analytics'
 import FunnelPanel from '@/components/analytics/FunnelPanel'
 import OnboardingFunnelPanel from '@/components/analytics/OnboardingFunnelPanel'
+import ProductAnalyticsFunnelPanel from '@/components/analytics/ProductAnalyticsFunnelPanel'
 import PlatformOverviewPanel from '@/components/analytics/PlatformOverviewPanel'
 import OrganizationsTable from '@/components/analytics/OrganizationsTable'
 
@@ -16,9 +17,10 @@ export default async function AnalyticsPage() {
   const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single()
   if (!profile?.is_admin) redirect('/agents')
 
-  const [overview, onboardingFunnel, salesFunnel, organizations] = await Promise.all([
+  const [overview, onboardingFunnel, productFunnel, salesFunnel, organizations] = await Promise.all([
     getPlatformOverview(supabase),
     getOnboardingFunnel(supabase),
+    getProductAnalyticsFunnel(supabase),
     getAnalyticsFunnel(supabase),
     getAnalyticsByOrganization(supabase),
   ])
@@ -34,6 +36,7 @@ export default async function AnalyticsPage() {
       </div>
 
       <PlatformOverviewPanel overview={overview} />
+      <ProductAnalyticsFunnelPanel funnel={productFunnel} />
       <OnboardingFunnelPanel funnel={onboardingFunnel} />
       <FunnelPanel funnel={salesFunnel} />
       <OrganizationsTable rows={organizations} />

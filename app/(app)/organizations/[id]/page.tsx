@@ -17,20 +17,23 @@ import WorkflowCard from '@/components/organizations/WorkflowCard'
 import WorkflowRunsList from '@/components/organizations/WorkflowRunsList'
 import TaskDashboardPanel from '@/components/organizations/TaskDashboardPanel'
 import IntegrationsPanel from '@/components/sales/IntegrationsPanel'
-import SalesMetricsPanel from '@/components/sales/SalesMetricsPanel'
-import SalesActivityFeed from '@/components/sales/SalesActivityFeed'
 import CheckRepliesButton from '@/components/sales/CheckRepliesButton'
-import MarkMeetingBookedForm from '@/components/sales/MarkMeetingBookedForm'
-import { getOrganizationIntegrations, getSalesActivity, getSalesMetrics } from '@/lib/sales'
+import SalesActivityFeed from '@/components/sales/SalesActivityFeed'
+import { getOrganizationIntegrations, getSalesActivity } from '@/lib/sales'
 import SetupWizardPanel from '@/components/sales/SetupWizardPanel'
 import { getSetupWizardState } from '@/lib/setupWizard'
 import CampaignDashboard from '@/components/campaigns/CampaignDashboard'
 import CampaignLaunchForm from '@/components/campaigns/CampaignLaunchForm'
 import { getCampaignState } from '@/lib/campaigns'
+import { getMeetingFunnel, getMeetings } from '@/lib/meetings'
+import BusinessDashboard from '@/components/dashboard/BusinessDashboard'
+import { getBusinessDashboardData } from '@/lib/businessDashboard'
+import ReportsPanel from '@/components/reports/ReportsPanel'
+import { getOrganizationReports } from '@/lib/reports'
 
 export const dynamic = 'force-dynamic'
 
-const VALID_TABS = ['overview', 'departments', 'agents', 'performance', 'tasks', 'workflows', 'activity', 'sales', 'integrations', 'setup', 'campaign'] as const
+const VALID_TABS = ['dashboard', 'overview', 'departments', 'agents', 'performance', 'tasks', 'workflows', 'activity', 'integrations', 'setup', 'campaign', 'reports'] as const
 type Tab = (typeof VALID_TABS)[number]
 
 export default async function OrganizationPage({
@@ -42,7 +45,7 @@ export default async function OrganizationPage({
   const { id } = await params
   const sp = await searchParams
   const tabParam = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab
-  const tab: Tab = (VALID_TABS as readonly string[]).includes(tabParam || '') ? (tabParam as Tab) : 'overview'
+  const tab: Tab = (VALID_TABS as readonly string[]).includes(tabParam || '') ? (tabParam as Tab) : 'dashboard'
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -61,7 +64,7 @@ export default async function OrganizationPage({
 
   return (
     <div className="max-w-3xl mx-auto">
-      <div className="bg-[#0C0D22] border border-[#3C3A58]/30 rounded-2xl p-6 mb-6">
+      <div className="no-print bg-[#0C0D22] border border-[#3C3A58]/30 rounded-2xl p-6 mb-6">
         <div className="flex items-start gap-3 mb-3">
           {org.avatar_url ? (
             <Image src={org.avatar_url} alt="" width={48} height={48} className="rounded-xl object-cover w-12 h-12" />
@@ -90,6 +93,7 @@ export default async function OrganizationPage({
 
       <OrgTabs orgId={id} active={tab} />
 
+      {tab === 'dashboard' && <DashboardTab organizationId={id} />}
       {tab === 'overview' && <OverviewTab organizationId={id} metrics={metrics} />}
       {tab === 'departments' && <DepartmentsTab organizationId={id} isManager={!!isManager} />}
       {tab === 'agents' && <AgentsTab organizationId={id} currentUserId={user.id} isManager={!!isManager} />}
@@ -97,10 +101,10 @@ export default async function OrganizationPage({
       {tab === 'tasks' && <TasksTab organizationId={id} />}
       {tab === 'workflows' && <WorkflowsTab organizationId={id} currentUserId={user.id} isManager={!!isManager} />}
       {tab === 'activity' && <ActivityTab organizationId={id} />}
-      {tab === 'sales' && <SalesTab organizationId={id} />}
       {tab === 'integrations' && <IntegrationsTab organizationId={id} isManager={!!isManager} error={Array.isArray(sp.error) ? sp.error[0] : sp.error} />}
       {tab === 'setup' && <SetupWizardTab organizationId={id} />}
       {tab === 'campaign' && <CampaignTab organizationId={id} />}
+      {tab === 'reports' && <ReportsTab organizationId={id} organizationName={org.name} />}
     </div>
   )
 }
@@ -343,24 +347,16 @@ async function ActivityTab({ organizationId }: { organizationId: string }) {
   return <OrgActivityFeed activity={(activity as OrganizationActivity[]) || []} />
 }
 
-async function SalesTab({ organizationId }: { organizationId: string }) {
+async function DashboardTab({ organizationId }: { organizationId: string }) {
   const supabase = await createClient()
-  const [metrics, activity] = await Promise.all([
-    getSalesMetrics(supabase, organizationId),
-    getSalesActivity(supabase, organizationId, 50),
-  ])
+  const data = await getBusinessDashboardData(supabase, organizationId)
+  return <BusinessDashboard organizationId={organizationId} data={data} />
+}
 
-  return (
-    <div className="space-y-6">
-      <SalesMetricsPanel metrics={metrics} />
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h2 className="font-['Space_Grotesk'] font-bold text-lg">Activity</h2>
-        <CheckRepliesButton organizationId={organizationId} />
-      </div>
-      <SalesActivityFeed activity={activity} />
-      <MarkMeetingBookedForm organizationId={organizationId} />
-    </div>
-  )
+async function ReportsTab({ organizationId, organizationName }: { organizationId: string; organizationName: string }) {
+  const supabase = await createClient()
+  const reports = await getOrganizationReports(supabase, organizationId)
+  return <ReportsPanel organizationId={organizationId} organizationName={organizationName} reports={reports} />
 }
 
 async function IntegrationsTab({ organizationId, isManager, error }: { organizationId: string; isManager: boolean; error?: string }) {
@@ -379,9 +375,12 @@ async function SetupWizardTab({ organizationId }: { organizationId: string }) {
 
 async function CampaignTab({ organizationId }: { organizationId: string }) {
   const supabase = await createClient()
-  const [state, integrations] = await Promise.all([
+  const [state, integrations, meetings, meetingFunnel, activity] = await Promise.all([
     getCampaignState(supabase, organizationId),
     getOrganizationIntegrations(supabase, organizationId),
+    getMeetings(supabase, organizationId),
+    getMeetingFunnel(supabase, organizationId),
+    getSalesActivity(supabase, organizationId, 50),
   ])
 
   // A goal can exist with no usable campaign behind it yet — e.g. launch
@@ -392,9 +391,15 @@ async function CampaignTab({ organizationId }: { organizationId: string }) {
   // permanently empty dashboard with no way to (re)launch.
   const hasCampaign = !!state.goal && state.stages.some((s) => s.task)
 
-  return hasCampaign ? (
-    <CampaignDashboard organizationId={organizationId} state={state} integrations={integrations} />
-  ) : (
-    <CampaignLaunchForm organizationId={organizationId} />
+  if (!hasCampaign) return <CampaignLaunchForm organizationId={organizationId} />
+
+  return (
+    <div className="space-y-6">
+      <CampaignDashboard organizationId={organizationId} state={state} integrations={integrations} meetings={meetings} meetingFunnel={meetingFunnel} />
+      <div>
+        <h2 className="font-['Space_Grotesk'] font-bold text-lg mb-3">Activity Log</h2>
+        <SalesActivityFeed activity={activity} />
+      </div>
+    </div>
   )
 }

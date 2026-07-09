@@ -289,9 +289,11 @@ export function getIntegrationStatusColor(status: string): string {
 export function getSalesActivityIcon(type: string): string {
   switch (type) {
     case 'lead_found': return '🔎'
+    case 'email_drafted': return '📝'
     case 'email_sent': return '📤'
     case 'reply_received': return '↩️'
     case 'meeting_booked': return '📅'
+    case 'contact_synced': return '🔄'
     default: return '•'
   }
 }
@@ -299,9 +301,11 @@ export function getSalesActivityIcon(type: string): string {
 export function getSalesActivityLabel(type: string): string {
   switch (type) {
     case 'lead_found': return 'Lead found'
+    case 'email_drafted': return 'Email drafted'
     case 'email_sent': return 'Email sent'
     case 'reply_received': return 'Reply received'
     case 'meeting_booked': return 'Meeting booked'
+    case 'contact_synced': return 'Contact synced'
     default: return 'Activity'
   }
 }

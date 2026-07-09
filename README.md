@@ -1,4 +1,4 @@
-# AI Workforce — B2B Sales Vertical: Real Integrations (v10, Stabilization Sprint 1, Campaign Experience Sprint, Customer Validation Sprint, Design Partner Sprint)
+# AI Workforce — B2B Sales Vertical: Real Integrations (v10, Stabilization Sprint 1, Campaign Experience Sprint, Customer Validation Sprint, Design Partner Sprint, Real Customer Value & Revenue Engine Sprint)
 
 Give every AI worker a verifiable, discoverable identity. Built with **Next.js 16 (App Router)**, **TypeScript**, **Tailwind CSS**, and **Supabase** (Auth, Postgres).
 
@@ -355,6 +355,105 @@ were found.
   `get_organization_timeline`) was exercised as an admin/org-member
   (succeeds) and an unrelated outsider (blocked), in both directions.
 
+## Real Customer Value & Revenue Engine Sprint
+
+The Design Partner Sprint's headline finding was that this platform is a
+technically impressive system with no paying customers and no proof it
+consistently produces business outcomes. This sprint's mandate was
+explicit: no new workforce templates, no new agent frameworks, no new
+autonomous systems — just make a non-technical business owner able to
+sign up, connect Gmail, launch a campaign, approve emails, receive
+replies, and book meetings, and be able to answer "how many leads, how
+many emails, how many replies, how many meetings, what revenue
+opportunity" in under 30 seconds.
+
+- 💼 **Business Dashboard + CEO Mode** (`/organizations/[id]?tab=dashboard`,
+  now the default tab) — outcomes only, no agents/tasks/workflows/plan
+  steps in sight. Revenue is shown honestly as **Estimated Pipeline
+  Value** (meetings booked × average deal value — the only real revenue
+  proxy this platform has; there is no closed-deal tracking anywhere, so
+  nothing is fabricated), alongside Meetings Booked, Opportunities
+  Created (real replies received), and a Conversion Rate (meetings ÷
+  leads). Campaign Health shows active campaigns, prospects found, emails
+  sent, and reply rate. Agent Activity renders as plain-language lines —
+  "Research Agent found 87 leads", "Outreach Agent sent 143 emails", "CRM
+  Agent updated 58 contacts" — built by aggregating the existing
+  `sales_activities` ledger per agent in TS (`getAgentActivitySummary()`
+  in `lib/sales.ts`), not a new table. A single toggle switches the same
+  fetched data into **CEO Mode**: what happened today (last 24h prospects
+  found / emails sent / replies received / meetings booked), what
+  requires approval (pending draft count), and simple rule-based
+  recommendations (connect a missing integration, expand ICP targeting on
+  a weak reply rate, increase send volume on a strong one).
+- 🎯 **Campaign Command Center** — the Campaign tab is now the single,
+  unified campaign screen the mission asked for, folding in what used to
+  be a separate "Sales Pipeline" tab (now removed; its activity feed
+  moved into this tab so nothing was lost). It shows the ICP (industry,
+  company size, location, description — persisted onto the *existing*
+  `organization_goals.target_metrics` jsonb column, not a new table,
+  since that column already existed from Phase 6 and was simply never
+  used for anything until now), the Prospect Pipeline (Discovered →
+  Enriched → Contacted → Responded → Meeting Booked, via new
+  `get_prospect_pipeline()`), the Email Queue (Pending Approval →
+  Approved → Sent → Replied, via new `get_email_queue()`), and ROI
+  (Meetings, Estimated Pipeline Value, and a genuine Cost Estimate summed
+  from `agent_executions.cost` — the real per-execution wallet debits
+  already tracked since Phase 7, not a fabricated number).
+- 📅 **Meeting lifecycle + conversion funnel** — meetings were previously
+  a single point-in-time "log it and forget it" event. A new `meetings`
+  table (Requested → Scheduled → Completed → Cancelled, via
+  `create_meeting()` / `update_meeting_status()` / `get_meeting_funnel()`)
+  now tracks the real lifecycle, replacing the old "Log a Booked Meeting"
+  form with a full `MeetingsPanel` (log + status-advance + cancel). It
+  lives alongside `sales_activities`, not instead of it — `create_meeting()`
+  still logs one backward-compatible `meeting_booked` activity so every
+  existing metric and funnel keeps working unchanged.
+- 📄 **Customer Success Reports** (weekly/monthly/quarterly, PDF export)
+  — a new Reports tab generates a point-in-time snapshot
+  (`generate_organization_report()`) covering leads found, emails sent,
+  replies received, meetings booked, the full meeting funnel, and
+  rule-based recommendations, stored in a new `organization_reports`
+  table (deliberately separate from the pre-existing admin-only,
+  platform-wide `system_reports` table — different audience, different
+  trust boundary). PDF export uses the browser's native print-to-PDF
+  (`window.print()` + `@media print` CSS), not a server-side headless
+  Chromium — this sandbox has Chromium pre-installed for testing, but a
+  real Vercel deployment doesn't, and adding `@sparticuz/chromium` +
+  `puppeteer-core` just to print a report would be new fragile
+  infrastructure for no real benefit.
+- 🚧 **"What's stopping you from getting value?" feedback** — the
+  feedback widget gained a fourth type (`blocker`) with a one-tap reason
+  picker (confusing workflow, poor leads, no replies, integrations,
+  missing features, other), stored in the same `user_feedback` table as
+  bug reports and feature requests from the Customer Validation Sprint
+  (same lifecycle, same admin inbox) rather than a new parallel table.
+- 🤝 **Design Partner CRM** (`/admin/design-partners`, admin only) — one
+  row per organization tracking contact, status, satisfaction score,
+  requested features, and notes, alongside real usage signals (workforce
+  deployed? campaign launched? emails sent?) pulled from the existing
+  `get_analytics_by_organization()` RPC and feedback volume pulled from
+  `user_feedback` — no duplicate tracking, just a CRM view over data that
+  already existed plus one small new table for the CRM-specific fields.
+- 📈 **Product analytics funnel**, the mission's exact stages — Signed
+  Up → Deployed a Workforce → Connected Gmail → Launched a Campaign →
+  Sent First Email → Received First Reply → Booked First Meeting — added
+  to `/analytics` via `get_product_analytics_funnel()`, kept alongside
+  (not replacing) the Design Partner Sprint's onboarding funnel, since the
+  two answer related but different questions and neither is a strict
+  subset of the other.
+- 🧪 **Verified against a genuinely fresh local Postgres 16 instance**
+  (18 migrations total, no errors) — every new RPC (`create_meeting`,
+  `update_meeting_status`, `get_meeting_funnel`, `generate_organization_
+  report`, `get_product_analytics_funnel`, `get_prospect_pipeline`,
+  `get_email_queue`, `get_campaign_cost`) and every new RLS policy
+  (`meetings_select`, `organization_reports_select`, `design_partners_
+  select/insert/update/delete`) was exercised end-to-end: a real workforce
+  deployment, a full simulated campaign (research → outreach → CRM sync →
+  reply → meeting through its full Requested → Scheduled → Completed
+  lifecycle), a generated weekly report, and a product analytics funnel
+  read — each checked as the legitimate org owner/admin (succeeds) and an
+  unrelated outsider (blocked or empty), in both directions.
+
 ## Getting started
 
 ### 1. Install dependencies
@@ -491,9 +590,12 @@ app/
     admin/verifications         – admin-only: approve pending verification requests
     organizations               – organization directory (search by name, pagination)
     organizations/new           – organization creation
-    organizations/[id]          – dashboard: Overview / Campaign / Departments / Agents /
-                                   Performance / Tasks / Workflows / Activity / Sales Pipeline /
-                                   Integrations / Setup Wizard (via ?tab=)
+    organizations/[id]          – dashboard: Dashboard (default; Business Dashboard + CEO Mode
+                                   toggle) / Campaign (Command Center: ICP, prospect pipeline,
+                                   email queue, ROI, meetings, activity log) / Reports
+                                   (weekly/monthly/quarterly, print-to-PDF) / Overview /
+                                   Departments / Agents / Performance / Tasks / Workflows /
+                                   Activity / Integrations / Setup Wizard (via ?tab=)
     tasks                       – work queue: My Tasks / Organization Tasks / Department Tasks,
                                    filtered by status/priority/agent/department
     tasks/new                   – task creation
@@ -516,9 +618,11 @@ app/
     analytics                     – admin-only: platform overview (right-now snapshot),
                                    onboarding funnel with drop-off, network-wide sales funnel,
                                    per-organization breakdown
-    admin/feedback                 – admin-only: bug/feature-request/feedback inbox
+    admin/feedback                 – admin-only: bug/feature-request/blocker/feedback inbox
     admin/support                  – admin-only: search an organization, see its full
                                    activity timeline, export its state as JSON
+    admin/design-partners           – admin-only: internal CRM — contact, usage, meetings,
+                                   feedback volume, requested features, satisfaction score
     help/errors                    – every error message this platform produces, explained
 components/
   nav                           – top nav (Workspace + Admin dropdowns collapse the
@@ -544,18 +648,30 @@ components/
                                    apply), org-scoped refresh/generate controls, anomalies panel
   sales                          – integrations panel + token connect form + disconnect button,
                                    sales metrics panel, activity feed, check-replies button,
-                                   log-a-booked-meeting form, setup wizard panel
+                                   setup wizard panel
   diagnostics                    – execution history, integration history, failures, retries,
                                    and assignment-decision panels
   onboarding                     – the guided onboarding wizard (org/deploy/integrations/campaign,
                                    one client component driven by real DB reads on each step)
-  campaigns                      – campaign launch form, campaign dashboard, per-stage run
-                                   button, prospects review list, drafts review + approve & send,
-                                   pause/resume/stop controls
+  campaigns                      – campaign launch form, Campaign Command Center dashboard
+                                   (ICP summary, prospect pipeline funnel, email queue funnel,
+                                   ROI card), per-stage run button, prospects review list,
+                                   drafts review + approve & send, pause/resume/stop controls
+  meetings                       – meeting lifecycle panel: log a meeting, funnel summary,
+                                   per-meeting status advance/cancel controls
+  reports                        – customer success reports: generate weekly/monthly/quarterly,
+                                   expandable list, print-to-PDF detail view
+  dashboard                      – Business Dashboard with a CEO Mode toggle (same fetched
+                                   data, rendered as a simplified daily snapshot + approvals +
+                                   recommendations instead of full metrics)
+  admin                          – Design Partner CRM row (inline edit: contact, status,
+                                   satisfaction score, requested features, notes)
   analytics                      – platform overview panel, onboarding funnel panel (with
-                                   drop-off), sales funnel panel, per-organization table
-  feedback                       – floating feedback widget (every authenticated page),
-                                   admin status-change control
+                                   drop-off), product analytics funnel panel (signup → first
+                                   meeting), sales funnel panel, per-organization table
+  feedback                       – floating feedback widget (bug/feature/general/blocker —
+                                   "what's stopping you from getting value?" — every
+                                   authenticated page), admin status-change control
   support                        – unified activity timeline feed
 lib/
   providers                     – ModelProvider abstraction: OpenAI, Anthropic, local/Ollama
@@ -567,11 +683,21 @@ lib/
                                    tagged for one), sales action handlers (draft-only outreach),
                                    the separate approved-send action, on-demand reply checking,
                                    AI plan generation
-  campaigns.ts                   – ICP-driven campaign launch (with AI-suggested domain fallback)
-                                   + campaign dashboard state aggregation
-  analytics.ts                   – onboarding funnel, platform overview, sales funnel,
-                                   per-organization analytics reads
-  feedback.ts                    – submit/list/update feedback
+  campaigns.ts                   – ICP-driven campaign launch (ICP persisted onto the existing
+                                   organization_goals.target_metrics jsonb column, with
+                                   AI-suggested domain fallback) + Campaign Command Center
+                                   state aggregation (prospect pipeline, email queue, real
+                                   cost from agent_executions, ROI)
+  meetings.ts                    – create/advance/list meetings + meeting funnel reads
+  reports.ts                     – generate/list organization customer success reports
+  designPartners.ts              – admin-only design partner CRM reads/writes (RLS-gated,
+                                   no RPC layer needed)
+  businessDashboard.ts            – composes sales metrics, pipeline, email queue, agent
+                                   activity, today's activity, and rule-based recommendations
+                                   into one read for the Business Dashboard + CEO Mode
+  analytics.ts                   – onboarding funnel, product analytics funnel, platform
+                                   overview, sales funnel, per-organization analytics reads
+  feedback.ts                    – submit/list/update feedback (including blocker + reason)
   support.ts                     – per-organization debug export + activity timeline reads
   errorReference.ts               – structured data behind /help/errors, kept in sync with
                                    TROUBLESHOOTING.md

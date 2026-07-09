@@ -25,6 +25,7 @@ const ADMIN_ITEMS = [
   { href: '/analytics', label: 'Analytics' },
   { href: '/admin/feedback', label: 'Feedback' },
   { href: '/admin/support', label: 'Support Tools' },
+  { href: '/admin/design-partners', label: 'Design Partners' },
 ]
 
 export default function Nav({ profile }: { profile: Profile }) {
@@ -42,7 +43,7 @@ export default function Nav({ profile }: { profile: Profile }) {
   const adminActive = ADMIN_ITEMS.some((i) => pathname.startsWith(i.href))
 
   return (
-    <nav className="border-b border-[#3C3A58]/30 bg-[#0C0D22]">
+    <nav className="no-print border-b border-[#3C3A58]/30 bg-[#0C0D22]">
       <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
         <Link href="/agents" className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full bg-[#6D28D9] flex items-center justify-center">

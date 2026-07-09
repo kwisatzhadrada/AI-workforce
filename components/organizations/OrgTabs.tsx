@@ -1,22 +1,23 @@
 import Link from 'next/link'
 
 const TABS = [
-  { value: 'overview', label: 'Overview' },
+  { value: 'dashboard', label: 'Dashboard' },
   { value: 'campaign', label: 'Campaign' },
+  { value: 'reports', label: 'Reports' },
+  { value: 'overview', label: 'Overview' },
   { value: 'departments', label: 'Departments' },
   { value: 'agents', label: 'Agents' },
   { value: 'performance', label: 'Performance' },
   { value: 'tasks', label: 'Tasks' },
   { value: 'workflows', label: 'Workflows' },
   { value: 'activity', label: 'Activity' },
-  { value: 'sales', label: 'Sales Pipeline' },
   { value: 'integrations', label: 'Integrations' },
   { value: 'setup', label: 'Setup Wizard' },
 ] as const
 
 export default function OrgTabs({ orgId, active }: { orgId: string; active: string }) {
   return (
-    <div className="flex flex-wrap gap-2 mb-6">
+    <div className="no-print flex flex-wrap gap-2 mb-6">
       {TABS.map((t) => (
         <Link
           key={t.value}

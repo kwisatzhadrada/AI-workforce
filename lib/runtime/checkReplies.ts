@@ -110,17 +110,3 @@ export async function checkRepliesForOrganization(supabase: SupabaseClient, orga
 
   return { checked: pending.length - failed, newReplies, failed, error: null }
 }
-
-export async function markMeetingBooked(
-  supabase: SupabaseClient,
-  params: { organizationId: string; contactEmail: string; contactName?: string | null; taskId?: string | null }
-): Promise<{ error: string | null }> {
-  const { error } = await supabase.rpc('record_sales_activity', {
-    p_org_id: params.organizationId,
-    p_activity_type: 'meeting_booked',
-    p_task_id: params.taskId || null,
-    p_contact_email: params.contactEmail,
-    p_contact_name: params.contactName || null,
-  })
-  return { error: error?.message || null }
-}

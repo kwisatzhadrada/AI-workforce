@@ -963,7 +963,14 @@ export type OrganizationIntegration = {
   updated_at: string
 }
 
-export type SalesActivityType = 'lead_found' | 'email_drafted' | 'email_sent' | 'reply_received' | 'meeting_booked'
+export type SalesActivityType = 'lead_found' | 'email_drafted' | 'email_sent' | 'reply_received' | 'meeting_booked' | 'contact_synced'
+
+export type AgentActivitySummary = {
+  agentId: string
+  agentName: string
+  activityType: SalesActivityType
+  count: number
+}
 
 export type SalesActivity = {
   id: string
@@ -1105,8 +1112,9 @@ export type OrganizationTimelineEvent = {
   created_at: string
 }
 
-export type FeedbackType = 'bug' | 'feature_request' | 'general'
+export type FeedbackType = 'bug' | 'feature_request' | 'general' | 'blocker'
 export type FeedbackStatus = 'open' | 'in_progress' | 'resolved' | 'closed'
+export type BlockerReason = 'confusing_workflow' | 'poor_leads' | 'no_replies' | 'integrations' | 'missing_features' | 'other'
 
 export type UserFeedback = {
   id: string
@@ -1117,7 +1125,104 @@ export type UserFeedback = {
   page_url: string | null
   status: FeedbackStatus
   admin_notes: string | null
+  blocker_reason: BlockerReason | null
   created_at: string
   updated_at: string
   profiles?: Pick<Profile, 'id' | 'full_name'>
+}
+
+export type MeetingStatus = 'requested' | 'scheduled' | 'completed' | 'cancelled'
+
+export type Meeting = {
+  id: string
+  organization_id: string
+  task_id: string | null
+  contact_email: string
+  contact_name: string | null
+  contact_company: string | null
+  status: MeetingStatus
+  scheduled_at: string | null
+  completed_at: string | null
+  cancelled_at: string | null
+  estimated_value: number | null
+  notes: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type MeetingFunnel = {
+  requested: number
+  scheduled: number
+  completed: number
+  cancelled: number
+  total: number
+}
+
+export type OrganizationReportType = 'weekly' | 'monthly' | 'quarterly'
+
+export type OrganizationReportContent = {
+  leads_found: number
+  emails_sent: number
+  replies_received: number
+  meetings_booked: number
+  meetings_requested: number
+  meetings_scheduled: number
+  meetings_completed: number
+  meetings_cancelled: number
+  recommendations: string[]
+}
+
+export type OrganizationReport = {
+  id: string
+  organization_id: string
+  report_type: OrganizationReportType
+  period_start: string
+  period_end: string
+  content: OrganizationReportContent
+  generated_by: string | null
+  created_at: string
+}
+
+export type DesignPartnerStatus = 'active' | 'paused' | 'churned'
+
+export type DesignPartner = {
+  id: string
+  organization_id: string
+  contact_name: string | null
+  contact_email: string | null
+  contact_role: string | null
+  status: DesignPartnerStatus
+  satisfaction_score: number | null
+  requested_features: string | null
+  notes: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  organizations?: Pick<Organization, 'id' | 'name'>
+}
+
+export type ProspectPipeline = {
+  discovered: number
+  enriched: number
+  contacted: number
+  responded: number
+  meeting_booked: number
+}
+
+export type EmailQueue = {
+  pending_approval: number
+  approved: number
+  sent: number
+  replied: number
+}
+
+export type ProductAnalyticsFunnel = {
+  signups: number
+  onboarding_completion: number
+  gmail_connections: number
+  campaign_launches: number
+  first_email_sent: number
+  first_reply_received: number
+  first_meeting_booked: number
 }

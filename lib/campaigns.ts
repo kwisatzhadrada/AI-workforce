@@ -1,6 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { getProvider, ModelProviderName, ProviderConfigError } from '@/lib/providers'
-import { GoalPlan, OrganizationGoal, SalesMetrics, Task } from '@/lib/types'
+import { EmailQueue, GoalPlan, OrganizationGoal, ProspectPipeline, SalesMetrics, Task } from '@/lib/types'
 import { extractDomains as parseDomains } from '@/lib/utils'
 
 const CAMPAIGN_GOAL_TITLE = 'Generate Leads'
@@ -69,6 +69,24 @@ export async function launchCampaign(supabase: SupabaseClient, params: LaunchCam
   let goalId = existingGoal?.id as string | undefined
   let managerAgentId = existingGoal?.manager_agent_id as string | null | undefined
 
+  // target_metrics is an existing generic jsonb column on organization_goals
+  // (Phase 6) — reused here to hold the structured ICP fields (industry,
+  // company size, location) for the Campaign Command Center to display.
+  // No new column, no new table: the campaign launch form already collects
+  // exactly these fields, they just weren't kept anywhere queryable before.
+  const icpMetrics = {
+    icp: {
+      targetIndustry: params.targetIndustry || null,
+      companySize: params.companySize || null,
+      location: params.location || null,
+      icpDescription: params.icpDescription || null,
+    },
+  }
+
+  if (goalId) {
+    await supabase.from('organization_goals').update({ target_metrics: icpMetrics }).eq('id', goalId)
+  }
+
   if (!goalId) {
     // deploy_workforce_template() (Phase 9/10) already creates a "Generate
     // Leads" goal with its manager_agent_id set for any org deployed from
@@ -100,6 +118,7 @@ export async function launchCampaign(supabase: SupabaseClient, params: LaunchCam
         description: params.icpDescription || null,
         priority: 'high',
         manager_agent_id: anyGoal.manager_agent_id,
+        target_metrics: icpMetrics,
       })
       .select('id, manager_agent_id')
       .single()
@@ -177,11 +196,50 @@ export type CampaignStage = {
   capabilityName: string | null
 }
 
+export type CampaignRoi = {
+  meetingsBooked: number
+  pipelineValue: number
+  costEstimate: number
+}
+
 export type CampaignState = {
   goal: OrganizationGoal | null
   plan: GoalPlan | null
   stages: CampaignStage[]
   metrics: SalesMetrics | null
+  icp: CampaignIcp | null
+  pipeline: ProspectPipeline | null
+  emailQueue: EmailQueue | null
+  roi: CampaignRoi | null
+}
+
+function extractIcp(goal: OrganizationGoal | null): CampaignIcp | null {
+  const raw = (goal?.target_metrics as { icp?: Partial<CampaignIcp> } | null)?.icp
+  if (!raw) return null
+  return {
+    targetIndustry: raw.targetIndustry || '',
+    companySize: raw.companySize || '',
+    location: raw.location || '',
+    icpDescription: raw.icpDescription || '',
+  }
+}
+
+export async function getProspectPipeline(supabase: SupabaseClient, organizationId: string): Promise<ProspectPipeline | null> {
+  const { data, error } = await supabase.rpc('get_prospect_pipeline', { p_org_id: organizationId }).single()
+  if (error || !data) return null
+  return data as ProspectPipeline
+}
+
+export async function getEmailQueue(supabase: SupabaseClient, organizationId: string): Promise<EmailQueue | null> {
+  const { data, error } = await supabase.rpc('get_email_queue', { p_org_id: organizationId }).single()
+  if (error || !data) return null
+  return data as EmailQueue
+}
+
+export async function getCampaignCost(supabase: SupabaseClient, organizationId: string): Promise<number> {
+  const { data, error } = await supabase.rpc('get_campaign_cost', { p_org_id: organizationId })
+  if (error || data == null) return 0
+  return data as number
 }
 
 const STAGE_DEFS: { key: CampaignStageKey; title: string; label: string }[] = [
@@ -200,7 +258,7 @@ export async function getCampaignState(supabase: SupabaseClient, organizationId:
     .limit(1)
     .maybeSingle()
 
-  if (!goal) return { goal: null, plan: null, stages: [], metrics: null }
+  if (!goal) return { goal: null, plan: null, stages: [], metrics: null, icp: null, pipeline: null, emailQueue: null, roi: null }
 
   const { data: plan } = await supabase
     .from('goal_plans')
@@ -243,6 +301,27 @@ export async function getCampaignState(supabase: SupabaseClient, organizationId:
   }
 
   const { data: metrics } = await supabase.rpc('get_sales_metrics', { p_org_id: organizationId }).single()
+  const [pipeline, emailQueue, cost] = await Promise.all([
+    getProspectPipeline(supabase, organizationId),
+    getEmailQueue(supabase, organizationId),
+    getCampaignCost(supabase, organizationId),
+  ])
 
-  return { goal: goal as OrganizationGoal, plan: (plan as GoalPlan) || null, stages, metrics: (metrics as SalesMetrics) || null }
+  const typedMetrics = (metrics as SalesMetrics) || null
+  const roi: CampaignRoi = {
+    meetingsBooked: typedMetrics?.meetings_booked || 0,
+    pipelineValue: typedMetrics?.estimated_pipeline_value || 0,
+    costEstimate: cost,
+  }
+
+  return {
+    goal: goal as OrganizationGoal,
+    plan: (plan as GoalPlan) || null,
+    stages,
+    metrics: typedMetrics,
+    icp: extractIcp(goal as OrganizationGoal),
+    pipeline,
+    emailQueue,
+    roi,
+  }
 }

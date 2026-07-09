@@ -218,6 +218,16 @@ export async function runCrmSync(
       }
 
       synced.push({ email: lead.email, contactId, emailed: !!sentRecord })
+
+      await supabase.rpc('record_sales_activity', {
+        p_org_id: params.organizationId,
+        p_activity_type: 'contact_synced',
+        p_agent_id: params.agentId,
+        p_task_id: params.taskId,
+        p_contact_email: lead.email,
+        p_contact_name: lead.name,
+        p_contact_company: lead.company,
+      })
     } catch (err) {
       failed.push({ email: lead.email, error: err instanceof Error ? err.message : 'CRM sync failed' })
     }

@@ -31,3 +31,24 @@ body {
   color: var(--t1);
   font-family: var(--font-inter), 'Inter', sans-serif;
 }
+
+/* Customer Success Reports use the browser's native print-to-PDF
+   (window.print()) rather than a server-side renderer — no headless
+   Chromium dependency to keep alive in production. Anything not part of
+   the report itself (nav, tabs, feedback widget, on-screen controls) is
+   marked .no-print and a light background replaces the app's dark theme
+   so the exported PDF is legible and doesn't waste ink. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body, .print-area {
+    background: #ffffff !important;
+    color: #111111 !important;
+  }
+  .print-area * {
+    color: #111111 !important;
+    border-color: #cccccc !important;
+    background: #ffffff !important;
+  }
+}

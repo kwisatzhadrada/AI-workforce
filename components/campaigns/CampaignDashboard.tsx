@@ -1,14 +1,18 @@
 import Link from 'next/link'
 import { CampaignState } from '@/lib/campaigns'
-import { IntegrationProvider, OrganizationIntegration, OutreachDraft } from '@/lib/types'
+import { IntegrationProvider, Meeting, MeetingFunnel, OrganizationIntegration, OutreachDraft } from '@/lib/types'
 import RunStageButton from './RunStageButton'
 import ProspectsList from './ProspectsList'
 import DraftsReview from './DraftsReview'
 import CampaignControls from './CampaignControls'
 import CheckRepliesButton from '@/components/sales/CheckRepliesButton'
-import MarkMeetingBookedForm from '@/components/sales/MarkMeetingBookedForm'
 import SalesMetricsPanel from '@/components/sales/SalesMetricsPanel'
 import AvgDealValueForm from '@/components/sales/AvgDealValueForm'
+import IcpSummaryCard from './IcpSummaryCard'
+import ProspectPipelineFunnel from './ProspectPipelineFunnel'
+import EmailQueueFunnel from './EmailQueueFunnel'
+import CampaignRoiCard from './CampaignRoiCard'
+import MeetingsPanel from '@/components/meetings/MeetingsPanel'
 
 type Lead = { name: string | null; email: string; title: string | null; company: string | null; domain: string }
 
@@ -44,12 +48,16 @@ export default function CampaignDashboard({
   organizationId,
   state,
   integrations,
+  meetings,
+  meetingFunnel,
 }: {
   organizationId: string
   state: CampaignState
   integrations: OrganizationIntegration[]
+  meetings: Meeting[]
+  meetingFunnel: MeetingFunnel | null
 }) {
-  const { goal, stages, metrics } = state
+  const { goal, stages, metrics, icp, pipeline, emailQueue, roi } = state
   if (!goal) return null
 
   const connected = new Set(integrations.filter((i) => i.status === 'connected').map((i) => i.provider))
@@ -75,6 +83,10 @@ export default function CampaignDashboard({
         <CampaignControls goalId={goal.id} isPaused={goal.is_paused} status={goal.status} />
       </div>
 
+      <IcpSummaryCard icp={icp} />
+      <CampaignRoiCard roi={roi} />
+      <ProspectPipelineFunnel pipeline={pipeline} />
+      <EmailQueueFunnel queue={emailQueue} />
       <SalesMetricsPanel metrics={metrics} showPipelineValue />
       <AvgDealValueForm organizationId={organizationId} currentValue={metrics?.avg_deal_value ?? null} />
 
@@ -174,10 +186,11 @@ export default function CampaignDashboard({
       </div>
 
       <div className="bg-[#0C0D22] border border-[#3C3A58]/30 rounded-xl p-5 space-y-4">
-        <h3 className="font-medium text-[#EDEAF8]">Track Replies & Meetings</h3>
+        <h3 className="font-medium text-[#EDEAF8]">Check for Replies</h3>
         <CheckRepliesButton organizationId={organizationId} />
-        <MarkMeetingBookedForm organizationId={organizationId} />
       </div>
+
+      <MeetingsPanel organizationId={organizationId} meetings={meetings} funnel={meetingFunnel} />
     </div>
   )
 }
