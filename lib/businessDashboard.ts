@@ -1,7 +1,8 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { getAgentActivitySummary, getSalesMetrics, getOrganizationIntegrations } from './sales'
 import { getEmailQueue, getProspectPipeline, getCampaignCost } from './campaigns'
-import { AgentActivitySummary, EmailQueue, ProspectPipeline, SalesMetrics } from './types'
+import { getBusinessOutcomes } from './health'
+import { AgentActivitySummary, BusinessOutcomes, EmailQueue, ProspectPipeline, SalesMetrics } from './types'
 
 export type TodayActivity = {
   leadsFound: number
@@ -15,6 +16,7 @@ export type BusinessDashboardData = {
   pipeline: ProspectPipeline | null
   emailQueue: EmailQueue | null
   costEstimate: number
+  outcomes: BusinessOutcomes | null
   agentActivity: AgentActivitySummary[]
   today: TodayActivity
   pendingApproval: number
@@ -30,11 +32,12 @@ export type BusinessDashboardData = {
 export async function getBusinessDashboardData(supabase: SupabaseClient, organizationId: string): Promise<BusinessDashboardData> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
-  const [metrics, pipeline, emailQueue, costEstimate, agentActivity, integrations, todayResult] = await Promise.all([
+  const [metrics, pipeline, emailQueue, costEstimate, outcomes, agentActivity, integrations, todayResult] = await Promise.all([
     getSalesMetrics(supabase, organizationId),
     getProspectPipeline(supabase, organizationId),
     getEmailQueue(supabase, organizationId),
     getCampaignCost(supabase, organizationId),
+    getBusinessOutcomes(supabase, organizationId),
     getAgentActivitySummary(supabase, organizationId),
     getOrganizationIntegrations(supabase, organizationId),
     supabase.from('sales_activities').select('activity_type').eq('organization_id', organizationId).gte('created_at', since),
@@ -69,7 +72,7 @@ export async function getBusinessDashboardData(supabase: SupabaseClient, organiz
   if (recommendations.length === 0) recommendations.push('Everything looks healthy — no action needed right now.')
 
   return {
-    metrics, pipeline, emailQueue, costEstimate, agentActivity, today,
+    metrics, pipeline, emailQueue, costEstimate, outcomes, agentActivity, today,
     pendingApproval: emailQueue?.pending_approval || 0,
     hubspotConnected, gmailConnected, hunterConnected,
     recommendations,

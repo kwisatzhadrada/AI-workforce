@@ -1,30 +1,52 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { upsertDesignPartner } from '@/lib/designPartners'
-import { DesignPartnerStatus } from '@/lib/types'
+import { DesignPartnerStatus, HealthStatus } from '@/lib/types'
+import HealthBadge from './HealthBadge'
 
 const STATUS_COLOR: Record<DesignPartnerStatus, string> = {
-  active: 'text-green-400 bg-green-400/10 border-green-400/20',
-  paused: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
+  prospect: 'text-gray-400 bg-gray-400/10 border-gray-400/20',
+  contacted: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20',
+  demo_scheduled: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20',
+  trial_active: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
+  active_user: 'text-green-400 bg-green-400/10 border-green-400/20',
+  paying_customer: 'text-green-400 bg-green-400/10 border-green-400/20',
   churned: 'text-red-400 bg-red-400/10 border-red-400/20',
+}
+
+const STATUS_LABEL: Record<DesignPartnerStatus, string> = {
+  prospect: 'Prospect',
+  contacted: 'Contacted',
+  demo_scheduled: 'Demo Scheduled',
+  trial_active: 'Trial Active',
+  active_user: 'Active User',
+  paying_customer: 'Paying Customer',
+  churned: 'Churned',
 }
 
 export type DesignPartnerRowData = {
   organizationId: string
   organizationName: string
+  industry: string | null
+  companySize: string | null
   contactName: string | null
   contactEmail: string | null
   contactRole: string | null
   status: DesignPartnerStatus
   satisfactionScore: number | null
   requestedFeatures: string | null
-  notes: string | null
-  usageSignal: string
+  feedbackNotes: string | null
+  meetingNotes: string | null
+  organizationsCreated: number
+  campaignsLaunched: number
+  emailsSent: number
+  repliesReceived: number
   meetingsBooked: number
-  feedbackCount: number
+  healthStatus: HealthStatus | null
 }
 
 export default function DesignPartnerRow({ data }: { data: DesignPartnerRowData }) {
@@ -37,7 +59,8 @@ export default function DesignPartnerRow({ data }: { data: DesignPartnerRowData 
   const [status, setStatus] = useState<DesignPartnerStatus>(data.status)
   const [satisfactionScore, setSatisfactionScore] = useState(data.satisfactionScore?.toString() || '')
   const [requestedFeatures, setRequestedFeatures] = useState(data.requestedFeatures || '')
-  const [notes, setNotes] = useState(data.notes || '')
+  const [feedbackNotes, setFeedbackNotes] = useState(data.feedbackNotes || '')
+  const [meetingNotes, setMeetingNotes] = useState(data.meetingNotes || '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -52,7 +75,8 @@ export default function DesignPartnerRow({ data }: { data: DesignPartnerRowData 
       status,
       satisfactionScore: satisfactionScore ? Number(satisfactionScore) : null,
       requestedFeatures: requestedFeatures.trim() || null,
-      notes: notes.trim() || null,
+      feedbackNotes: feedbackNotes.trim() || null,
+      meetingNotes: meetingNotes.trim() || null,
     })
     setSaving(false)
     if (error) { setError(error); return }
@@ -63,32 +87,26 @@ export default function DesignPartnerRow({ data }: { data: DesignPartnerRowData 
   return (
     <div className="bg-[#0C0D22] border border-[#3C3A58]/30 rounded-xl p-4">
       <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-        <div>
-          <span className="text-[#EDEAF8] font-medium">{data.organizationName}</span>
-          <span className={`ml-2 text-xs px-2 py-0.5 rounded-md border capitalize ${STATUS_COLOR[status]}`}>{status}</span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link href={`/admin/design-partners/${data.organizationId}`} className="text-[#EDEAF8] font-medium hover:underline">
+            {data.organizationName}
+          </Link>
+          {data.industry && <span className="text-xs px-2 py-0.5 rounded-md bg-[#121428] border border-[#3C3A58] text-[#8A88A8]">{data.industry}</span>}
+          {data.companySize && <span className="text-xs px-2 py-0.5 rounded-md bg-[#121428] border border-[#3C3A58] text-[#8A88A8]">{data.companySize}</span>}
+          <span className={`text-xs px-2 py-0.5 rounded-md border ${STATUS_COLOR[status]}`}>{STATUS_LABEL[status]}</span>
+          {data.healthStatus && <HealthBadge status={data.healthStatus} />}
         </div>
         <button onClick={() => setEditing((v) => !v)} className="text-xs text-[#6D28D9] hover:underline">
           {editing ? 'Cancel' : 'Edit'}
         </button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs mb-2">
-        <div>
-          <div className="text-[#8A88A8]">Usage</div>
-          <div className="text-[#EDEAF8]">{data.usageSignal}</div>
-        </div>
-        <div>
-          <div className="text-[#8A88A8]">Meetings</div>
-          <div className="text-[#EDEAF8] tabular-nums">{data.meetingsBooked}</div>
-        </div>
-        <div>
-          <div className="text-[#8A88A8]">Feedback</div>
-          <div className="text-[#EDEAF8] tabular-nums">{data.feedbackCount}</div>
-        </div>
-        <div>
-          <div className="text-[#8A88A8]">Satisfaction</div>
-          <div className="text-[#EDEAF8]">{data.satisfactionScore != null ? `${data.satisfactionScore}/10` : '—'}</div>
-        </div>
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs mb-2">
+        <div><div className="text-[#8A88A8]">Organizations</div><div className="text-[#EDEAF8] tabular-nums">{data.organizationsCreated}</div></div>
+        <div><div className="text-[#8A88A8]">Campaigns</div><div className="text-[#EDEAF8] tabular-nums">{data.campaignsLaunched}</div></div>
+        <div><div className="text-[#8A88A8]">Emails Sent</div><div className="text-[#EDEAF8] tabular-nums">{data.emailsSent}</div></div>
+        <div><div className="text-[#8A88A8]">Replies</div><div className="text-[#EDEAF8] tabular-nums">{data.repliesReceived}</div></div>
+        <div><div className="text-[#8A88A8]">Meetings</div><div className="text-[#EDEAF8] tabular-nums">{data.meetingsBooked}</div></div>
       </div>
 
       {!editing && (
@@ -98,8 +116,10 @@ export default function DesignPartnerRow({ data }: { data: DesignPartnerRowData 
           ) : (
             <div>No contact on file.</div>
           )}
-          {data.requestedFeatures && <div>Requested: {data.requestedFeatures}</div>}
-          {data.notes && <div>Notes: {data.notes}</div>}
+          {data.satisfactionScore != null && <div>Satisfaction: {data.satisfactionScore}/10</div>}
+          {data.requestedFeatures && <div>Feature requests: {data.requestedFeatures}</div>}
+          {data.meetingNotes && <div>Meeting notes: {data.meetingNotes}</div>}
+          {data.feedbackNotes && <div>Feedback notes: {data.feedbackNotes}</div>}
         </div>
       )}
 
@@ -114,16 +134,16 @@ export default function DesignPartnerRow({ data }: { data: DesignPartnerRowData 
               className="bg-[#121428] border border-[#3C3A58] text-[#EDEAF8] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#6D28D9]" />
             <select value={status} onChange={(e) => setStatus(e.target.value as DesignPartnerStatus)}
               className="bg-[#121428] border border-[#3C3A58] text-[#EDEAF8] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#6D28D9]">
-              <option value="active">Active</option>
-              <option value="paused">Paused</option>
-              <option value="churned">Churned</option>
+              {(Object.keys(STATUS_LABEL) as DesignPartnerStatus[]).map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
             </select>
             <input type="number" min={1} max={10} value={satisfactionScore} onChange={(e) => setSatisfactionScore(e.target.value)} placeholder="Satisfaction (1-10)"
               className="bg-[#121428] border border-[#3C3A58] text-[#EDEAF8] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#6D28D9]" />
           </div>
-          <textarea value={requestedFeatures} onChange={(e) => setRequestedFeatures(e.target.value)} rows={2} placeholder="Requested features"
+          <textarea value={requestedFeatures} onChange={(e) => setRequestedFeatures(e.target.value)} rows={2} placeholder="Feature requests"
             className="w-full bg-[#121428] border border-[#3C3A58] text-[#EDEAF8] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#6D28D9]" />
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Internal notes"
+          <textarea value={meetingNotes} onChange={(e) => setMeetingNotes(e.target.value)} rows={2} placeholder="Meeting notes"
+            className="w-full bg-[#121428] border border-[#3C3A58] text-[#EDEAF8] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#6D28D9]" />
+          <textarea value={feedbackNotes} onChange={(e) => setFeedbackNotes(e.target.value)} rows={2} placeholder="Feedback notes"
             className="w-full bg-[#121428] border border-[#3C3A58] text-[#EDEAF8] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#6D28D9]" />
           <button onClick={save} disabled={saving}
             className="bg-[#6D28D9] hover:bg-[#5B21B6] disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium">

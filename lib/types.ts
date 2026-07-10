@@ -208,6 +208,7 @@ export type Organization = {
   avatar_url: string | null
   website_url: string | null
   industry: string | null
+  company_size: string | null
   avg_deal_value: number | null
   created_at: string
   updated_at: string
@@ -1184,7 +1185,7 @@ export type OrganizationReport = {
   created_at: string
 }
 
-export type DesignPartnerStatus = 'active' | 'paused' | 'churned'
+export type DesignPartnerStatus = 'prospect' | 'contacted' | 'demo_scheduled' | 'trial_active' | 'active_user' | 'paying_customer' | 'churned'
 
 export type DesignPartner = {
   id: string
@@ -1195,11 +1196,117 @@ export type DesignPartner = {
   status: DesignPartnerStatus
   satisfaction_score: number | null
   requested_features: string | null
-  notes: string | null
+  feedback_notes: string | null
+  meeting_notes: string | null
   created_by: string | null
   created_at: string
   updated_at: string
+  organizations?: Pick<Organization, 'id' | 'name' | 'industry' | 'company_size'>
+}
+
+export type JourneyMilestone = {
+  milestone: 'signup' | 'template_deployed' | 'gmail_connected' | 'campaign_launched' | 'first_email_approved' | 'first_reply_received' | 'first_meeting_booked'
+  occurred_at: string | null
+}
+
+export type HealthStatus = 'healthy' | 'at_risk' | 'critical'
+
+export type CustomerHealth = {
+  adoption_score: number
+  success_score: number
+  risk_score: number
+  health_status: HealthStatus
+}
+
+export type BusinessOutcomes = {
+  meetings_booked: number
+  opportunities_created: number
+  positive_replies: number
+  pipeline_generated: number
+}
+
+export type RevenueEventType = 'trial_started' | 'subscription_started' | 'subscription_cancelled' | 'upgrade' | 'downgrade'
+
+export type RevenueEvent = {
+  id: string
+  organization_id: string
+  event_type: RevenueEventType
+  amount: number | null
+  notes: string | null
+  created_by: string | null
+  created_at: string
   organizations?: Pick<Organization, 'id' | 'name'>
+}
+
+export type RevenueMetrics = {
+  mrr: number
+  arr: number
+  active_customers: number
+  churned_last_30d: number
+  churn_rate_pct: number
+}
+
+export type ConversationCategory = 'question' | 'bug' | 'feature_request'
+export type ConversationStatus = 'open' | 'in_progress' | 'resolved' | 'closed'
+export type ConversationPriority = 'low' | 'medium' | 'high' | 'urgent'
+
+export type SupportConversation = {
+  id: string
+  organization_id: string | null
+  user_id: string
+  subject: string
+  category: ConversationCategory
+  status: ConversationStatus
+  priority: ConversationPriority
+  created_at: string
+  updated_at: string
+  profiles?: Pick<Profile, 'id' | 'full_name'>
+  organizations?: Pick<Organization, 'id' | 'name'>
+}
+
+export type SupportMessageSenderRole = 'user' | 'admin'
+
+export type SupportMessage = {
+  id: string
+  conversation_id: string
+  sender_id: string
+  sender_role: SupportMessageSenderRole
+  body: string
+  created_at: string
+}
+
+export type DesignPartnerReportContent = {
+  adoption_score: number
+  success_score: number
+  risk_score: number
+  health_status: HealthStatus
+  leads_found: number
+  emails_sent: number
+  replies_received: number
+  journey: JourneyMilestone[]
+  requested_features: string | null
+  complaints_this_period: number
+  blockers_this_period: { reason: string | null; message: string }[]
+}
+
+export type DesignPartnerReport = {
+  id: string
+  organization_id: string
+  period_start: string
+  period_end: string
+  content: DesignPartnerReportContent
+  generated_by: string | null
+  created_at: string
+}
+
+export type DesignPartnerCohortRow = {
+  organization_id: string
+  organization_name: string
+  organizations_created: number
+  campaigns_launched: number
+  emails_sent: number
+  replies_received: number
+  meetings_booked: number
 }
 
 export type ProspectPipeline = {

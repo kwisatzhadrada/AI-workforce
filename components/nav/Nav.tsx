@@ -14,6 +14,7 @@ const WORKSPACE_ITEMS = [
   { href: '/goals', label: 'Goals' },
   { href: '/tasks', label: 'Tasks' },
   { href: '/executions', label: 'Executions' },
+  { href: '/support', label: 'Support' },
   { href: '/help/errors', label: 'Error Reference' },
 ]
 
@@ -25,6 +26,7 @@ const ADMIN_ITEMS = [
   { href: '/analytics', label: 'Analytics' },
   { href: '/admin/feedback', label: 'Feedback' },
   { href: '/admin/support', label: 'Support Tools' },
+  { href: '/admin/support/conversations', label: 'Conversations' },
   { href: '/admin/design-partners', label: 'Design Partners' },
 ]
 

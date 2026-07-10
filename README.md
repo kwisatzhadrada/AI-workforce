@@ -1,4 +1,4 @@
-# AI Workforce — B2B Sales Vertical: Real Integrations (v10, Stabilization Sprint 1, Campaign Experience Sprint, Customer Validation Sprint, Design Partner Sprint, Real Customer Value & Revenue Engine Sprint)
+# AI Workforce — B2B Sales Vertical: Real Integrations (v10, Stabilization Sprint 1, Campaign Experience Sprint, Customer Validation Sprint, Design Partner Sprint, Real Customer Value & Revenue Engine Sprint, Phase 19 — Design Partner Execution & Real World Validation)
 
 Give every AI worker a verifiable, discoverable identity. Built with **Next.js 16 (App Router)**, **TypeScript**, **Tailwind CSS**, and **Supabase** (Auth, Postgres).
 
@@ -454,6 +454,102 @@ opportunity" in under 30 seconds.
   read — each checked as the legitimate org owner/admin (succeeds) and an
   unrelated outsider (blocked or empty), in both directions.
 
+## Phase 19 — Design Partner Execution & Real World Validation
+
+The mission was explicit: not to build new functionality, but to prove the
+platform can generate real business outcomes for real companies, and to
+answer five questions — meetings booked, replies received, campaigns
+launched, where onboarding drop-off happens, and what real customers
+actually want.
+
+- 🏢 **Design Partner Operations Center** (`/admin/design-partners`,
+  admin only) — every organization on the platform, each with a real
+  funnel-shaped status (Prospect → Contacted → Demo Scheduled → Trial
+  Active → Active User → Paying Customer → Churned, replacing the
+  coarser active/paused/churned from the Revenue Engine Sprint), real
+  usage (organizations created, campaigns launched, emails sent, replies,
+  meetings), a health badge, and three separate note fields (meeting
+  notes, feedback notes, feature requests — split from one freeform field
+  since the mission asked for them as distinct categories). A detail page
+  per organization (`/admin/design-partners/[orgId]`) adds health scores,
+  journey replay, revenue events, and report generation in one place.
+- 🎥 **Session recording, done honestly** — "session recording" here
+  means replaying the real, already-logged timestamps of the milestones
+  that matter (signup, template deployed, Gmail connected, campaign
+  launched, first email approved, first reply received, first meeting
+  booked) via `get_organization_journey()`, not a new client-side capture
+  pipeline. `JourneyTimeline` steps through them in order and shows the
+  real gap between each one, so it's actually possible to see where a
+  user stalled.
+- 💚 **Customer health scores** — `get_organization_health()` computes
+  Adoption (integrations connected, campaign activity, weekly usage),
+  Success (replies, meetings, campaign completion), and Risk (no
+  activity, incomplete onboarding, no integrations) from real signals
+  already tracked elsewhere, using a fixed, documented formula — not a
+  model. Flags every organization Healthy / At Risk / Critical.
+- 💰 **First revenue tracking, without building a payment system** — a
+  new `revenue_events` table (trial started, subscription started,
+  cancelled, upgrade, downgrade) is a manually-logged real business fact,
+  the same "admin tells the system what really happened" pattern meetings
+  and avg-deal-value already established — not automated billing
+  infrastructure. `get_revenue_metrics()` computes MRR, ARR, active
+  customers, and 30-day churn from those real, human-entered events.
+  Admin only, never shown to the organization itself.
+- 💬 **Intercom-like in-app support** — real two-way conversations
+  (`support_conversations` + `support_messages`, at `/support`), not a
+  fire-and-forget ticket. Kept alongside `user_feedback` rather than
+  replacing it, since a quick bug report still doesn't need a thread. Any
+  signed-in user can ask a question, report a bug, or request a feature
+  and get real replies; admins triage status/priority and reply from the
+  same thread at `/admin/support/conversations`.
+- 📋 **Automated design partner reports** — `generate_design_partner_report()`
+  bundles adoption (usage/engagement), success (replies/meetings/pipeline),
+  and feedback (requested features/complaints/blockers) into one
+  admin-only report per organization, stored in a new
+  `design_partner_reports` table deliberately separate from the
+  customer-facing `organization_reports` — this one carries drop-off and
+  complaint content that should never reach the partner it's about.
+- 📈 **Real ROI Proof: Business Outcomes** — a new panel (shown to both
+  the organization itself and admins) displaying only measured values:
+  Meetings Booked (every meeting ever logged), Opportunities Created
+  (meetings that actually reached a calendar — scheduled or completed),
+  Positive Replies (a reply is only counted if it produced a real
+  meeting — an objective outcome, not a sentiment guess), and Pipeline
+  Generated (the sum of real, human-entered meeting values only — never
+  the multiplication-based estimate that already exists elsewhere as
+  `estimated_pipeline_value`, clearly labeled as an estimate). No AI
+  scoring, no predictions anywhere in this panel, by design.
+- 🧹 **Removed remaining complexity** — the organization page's tab bar
+  now shows only what a customer cares about by default (Dashboard,
+  Campaign, Reports, Integrations); Departments, Agents, Performance,
+  Tasks, Workflows, Activity, and Setup Wizard collapse behind one
+  "Advanced" toggle, the same pattern the nav's Workspace/Admin dropdowns
+  already established. Nothing was removed or broken — it's just not
+  competing for attention on every visit.
+- 🎯 **Design partner cohort dashboard** — a dedicated panel on the
+  Operations Center (`get_design_partner_cohort()`) shows every
+  officially-tracked design partner and its real outcomes side by side:
+  organizations created, campaigns launched, emails sent, replies
+  received, meetings booked — the "5 partners" view the mission asked for.
+- 🧪 **Verified against a genuinely fresh local Postgres 16 instance**
+  (19 migrations total, no errors) — every new RPC (`get_organization_
+  journey`, `get_organization_health`, `get_business_outcomes`,
+  `record_revenue_event`, `get_revenue_metrics`, `create_support_
+  conversation`, `post_support_message`, `update_support_conversation`,
+  `generate_design_partner_report`, `get_design_partner_cohort`) and RLS
+  policy (`revenue_events_select`, `support_conversations_select`,
+  `support_messages_select`, `design_partner_reports_select`) was
+  exercised end-to-end through a real simulated campaign (workforce
+  deployed, prospects found, emails sent, a reply received, a meeting
+  scheduled, revenue logged, a support conversation posted and resolved),
+  checked as the legitimate org owner/admin (succeeds) and an unrelated
+  outsider (blocked or empty), in both directions. Two real bugs were
+  caught this way: `get_organization_journey()`'s `UNION ALL ... ORDER BY`
+  referenced an expression instead of a projected column name (fixed by
+  wrapping the union in a subquery), and `get_organization_health()`
+  declared its "last activity" variable as `int` instead of `timestamptz`
+  (a straight type mismatch caught the moment the function actually ran).
+
 ## Getting started
 
 ### 1. Install dependencies
@@ -591,11 +687,15 @@ app/
     organizations               – organization directory (search by name, pagination)
     organizations/new           – organization creation
     organizations/[id]          – dashboard: Dashboard (default; Business Dashboard + CEO Mode
-                                   toggle) / Campaign (Command Center: ICP, prospect pipeline,
-                                   email queue, ROI, meetings, activity log) / Reports
-                                   (weekly/monthly/quarterly, print-to-PDF) / Overview /
-                                   Departments / Agents / Performance / Tasks / Workflows /
-                                   Activity / Integrations / Setup Wizard (via ?tab=)
+                                   toggle + Business Outcomes) / Campaign (Command Center: ICP,
+                                   prospect pipeline, email queue, ROI, meetings, activity log) /
+                                   Reports (weekly/monthly/quarterly, print-to-PDF) / Integrations
+                                   as the primary, always-visible tabs — Overview / Departments /
+                                   Agents / Performance / Tasks / Workflows / Activity / Setup
+                                   Wizard collapse behind one "Advanced" toggle (via ?tab=)
+    support                      – ask a question / report a bug / request a feature as a real
+                                   two-way conversation thread
+    support/[id]                  – conversation thread: reply, and (admin) set status/priority
     tasks                       – work queue: My Tasks / Organization Tasks / Department Tasks,
                                    filtered by status/priority/agent/department
     tasks/new                   – task creation
@@ -621,8 +721,13 @@ app/
     admin/feedback                 – admin-only: bug/feature-request/blocker/feedback inbox
     admin/support                  – admin-only: search an organization, see its full
                                    activity timeline, export its state as JSON
-    admin/design-partners           – admin-only: internal CRM — contact, usage, meetings,
-                                   feedback volume, requested features, satisfaction score
+    admin/support/conversations      – admin-only: inbox of every support conversation,
+                                   linking into the same thread view as /support/[id]
+    admin/design-partners           – admin-only: Design Partner Operations Center — revenue
+                                   metrics, design partner cohort outcomes, every organization
+                                   with real usage, health badge, funnel status, and notes
+    admin/design-partners/[orgId]     – admin-only: health scores, journey replay, revenue
+                                   event log, and report generation for one organization
     help/errors                    – every error message this platform produces, explained
 components/
   nav                           – top nav (Workspace + Admin dropdowns collapse the
@@ -663,16 +768,20 @@ components/
                                    expandable list, print-to-PDF detail view
   dashboard                      – Business Dashboard with a CEO Mode toggle (same fetched
                                    data, rendered as a simplified daily snapshot + approvals +
-                                   recommendations instead of full metrics)
-  admin                          – Design Partner CRM row (inline edit: contact, status,
-                                   satisfaction score, requested features, notes)
+                                   recommendations instead of full metrics) + BusinessOutcomesPanel
+                                   (real-only ROI proof, shared with the admin detail page)
+  admin                          – Design Partner Operations Center building blocks: partner row
+                                   (inline edit: contact, funnel status, satisfaction, notes),
+                                   health badge, revenue metrics panel, cohort panel, journey
+                                   timeline replay, revenue event form/list, report panel
   analytics                      – platform overview panel, onboarding funnel panel (with
                                    drop-off), product analytics funnel panel (signup → first
                                    meeting), sales funnel panel, per-organization table
   feedback                       – floating feedback widget (bug/feature/general/blocker —
                                    "what's stopping you from getting value?" — every
                                    authenticated page), admin status-change control
-  support                        – unified activity timeline feed
+  support                        – unified activity timeline feed (admin debug tool),
+                                   Intercom-like conversation thread + new-conversation form
 lib/
   providers                     – ModelProvider abstraction: OpenAI, Anthropic, local/Ollama
   integrations                   – EmailProvider/CrmProvider/ProspectProvider abstraction: Gmail
@@ -691,10 +800,19 @@ lib/
   meetings.ts                    – create/advance/list meetings + meeting funnel reads
   reports.ts                     – generate/list organization customer success reports
   designPartners.ts              – admin-only design partner CRM reads/writes (RLS-gated,
-                                   no RPC layer needed)
+                                   no RPC layer needed) + design partner cohort read
+  designPartnerReports.ts         – generate/list admin-only adoption/success/feedback reports
+  journey.ts                     – real, already-logged milestone timestamps per organization
+  health.ts                      – customer health scores (adoption/success/risk) + real-only
+                                   Business Outcomes (meetings, opportunities, positive replies,
+                                   pipeline generated — no estimates)
+  revenue.ts                     – record/list revenue events, MRR/ARR/churn/active customers
+  supportConversations.ts          – Intercom-like two-way conversation threads (distinct from
+                                   feedback.ts's fire-and-forget bug/feature reports)
   businessDashboard.ts            – composes sales metrics, pipeline, email queue, agent
-                                   activity, today's activity, and rule-based recommendations
-                                   into one read for the Business Dashboard + CEO Mode
+                                   activity, today's activity, real business outcomes, and
+                                   rule-based recommendations into one read for the Business
+                                   Dashboard + CEO Mode
   analytics.ts                   – onboarding funnel, product analytics funnel, platform
                                    overview, sales funnel, per-organization analytics reads
   feedback.ts                    – submit/list/update feedback (including blocker + reason)

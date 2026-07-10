@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { BusinessDashboardData } from '@/lib/businessDashboard'
 import { AgentActivitySummary, SalesActivityType } from '@/lib/types'
+import BusinessOutcomesPanel from './BusinessOutcomesPanel'
 
 function formatCurrency(value: number): string {
   return value.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
@@ -42,7 +43,7 @@ function AgentActivityLine({ activity }: { activity: AgentActivitySummary }) {
 
 export default function BusinessDashboard({ organizationId, data }: { organizationId: string; data: BusinessDashboardData }) {
   const [ceoMode, setCeoMode] = useState(false)
-  const { metrics, pipeline, emailQueue, costEstimate, agentActivity, today, pendingApproval, recommendations } = data
+  const { metrics, pipeline, emailQueue, costEstimate, outcomes, agentActivity, today, pendingApproval, recommendations } = data
 
   const leadsFound = metrics?.leads_found || 0
   const meetingsBooked = metrics?.meetings_booked || 0
@@ -113,6 +114,8 @@ export default function BusinessDashboard({ organizationId, data }: { organizati
               <p className="text-xs text-[#8A88A8] mt-3">This campaign has cost {formatCurrency(costEstimate)} to run so far.</p>
             )}
           </div>
+
+          <BusinessOutcomesPanel outcomes={outcomes} />
 
           <div className="bg-[#0C0D22] border border-[#3C3A58]/30 rounded-xl p-5">
             <h3 className="font-medium text-[#EDEAF8] mb-3">Campaign Health</h3>
