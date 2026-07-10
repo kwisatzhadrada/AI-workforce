@@ -13,6 +13,9 @@ import ProspectPipelineFunnel from './ProspectPipelineFunnel'
 import EmailQueueFunnel from './EmailQueueFunnel'
 import CampaignRoiCard from './CampaignRoiCard'
 import MeetingsPanel from '@/components/meetings/MeetingsPanel'
+import RunFullCampaignButton from '@/components/executive/RunFullCampaignButton'
+import ExperimentsPanel from '@/components/executive/ExperimentsPanel'
+import { Experiment } from '@/lib/types'
 
 type Lead = { name: string | null; email: string; title: string | null; company: string | null; domain: string }
 
@@ -50,12 +53,18 @@ export default function CampaignDashboard({
   integrations,
   meetings,
   meetingFunnel,
+  autonomyLevel,
+  experiments,
+  isManager,
 }: {
   organizationId: string
   state: CampaignState
   integrations: OrganizationIntegration[]
   meetings: Meeting[]
   meetingFunnel: MeetingFunnel | null
+  autonomyLevel: number
+  experiments: Experiment[]
+  isManager: boolean
 }) {
   const { goal, stages, metrics, icp, pipeline, emailQueue, roi } = state
   if (!goal) return null
@@ -102,14 +111,22 @@ export default function CampaignDashboard({
         {research?.agentName && <p className="text-xs text-[#8A88A8] mb-2">Run by {research.agentName}</p>}
         {!researchDone && research?.task && research.agentId && research.capabilityId && (
           isConnected('research') ? (
-            <RunStageButton
-              agentId={research.agentId}
-              taskId={research.task.id}
-              capabilityId={research.capabilityId}
-              taskTitle={research.task.title}
-              taskDescription={research.task.description}
-              label="Find & Enrich Prospects"
-            />
+            <div className="space-y-2">
+              {autonomyLevel >= 3 && drafts.length === 0 && isConnected('outreach') && outreach?.task && outreach.agentId && outreach.capabilityId && (
+                <RunFullCampaignButton
+                  research={{ agentId: research.agentId, taskId: research.task.id, capabilityId: research.capabilityId, taskTitle: research.task.title, taskDescription: research.task.description }}
+                  outreach={{ agentId: outreach.agentId, taskId: outreach.task.id, capabilityId: outreach.capabilityId, taskTitle: outreach.task.title, taskDescription: outreach.task.description }}
+                />
+              )}
+              <RunStageButton
+                agentId={research.agentId}
+                taskId={research.task.id}
+                capabilityId={research.capabilityId}
+                taskTitle={research.task.title}
+                taskDescription={research.task.description}
+                label="Find & Enrich Prospects Only"
+              />
+            </div>
           ) : (
             <ConnectFirstNotice organizationId={organizationId} label={STAGE_PROVIDER.research.label} />
           )
@@ -191,6 +208,8 @@ export default function CampaignDashboard({
       </div>
 
       <MeetingsPanel organizationId={organizationId} meetings={meetings} funnel={meetingFunnel} />
+
+      <ExperimentsPanel organizationId={organizationId} goalId={goal.id} experiments={experiments} isManager={isManager} />
     </div>
   )
 }

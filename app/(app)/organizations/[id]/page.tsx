@@ -30,10 +30,14 @@ import BusinessDashboard from '@/components/dashboard/BusinessDashboard'
 import { getBusinessDashboardData } from '@/lib/businessDashboard'
 import ReportsPanel from '@/components/reports/ReportsPanel'
 import { getOrganizationReports } from '@/lib/reports'
+import ExecutiveCommandCenter from '@/components/executive/ExecutiveCommandCenter'
+import { getExecutiveCommandCenterData } from '@/lib/executiveCommandCenter'
+import { getOrganizationExecutive } from '@/lib/executive'
+import { getExperiments } from '@/lib/experiments'
 
 export const dynamic = 'force-dynamic'
 
-const VALID_TABS = ['dashboard', 'overview', 'departments', 'agents', 'performance', 'tasks', 'workflows', 'activity', 'integrations', 'setup', 'campaign', 'reports'] as const
+const VALID_TABS = ['executive', 'dashboard', 'overview', 'departments', 'agents', 'performance', 'tasks', 'workflows', 'activity', 'integrations', 'setup', 'campaign', 'reports'] as const
 type Tab = (typeof VALID_TABS)[number]
 
 export default async function OrganizationPage({
@@ -45,7 +49,7 @@ export default async function OrganizationPage({
   const { id } = await params
   const sp = await searchParams
   const tabParam = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab
-  const tab: Tab = (VALID_TABS as readonly string[]).includes(tabParam || '') ? (tabParam as Tab) : 'dashboard'
+  const tab: Tab = (VALID_TABS as readonly string[]).includes(tabParam || '') ? (tabParam as Tab) : 'executive'
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -93,6 +97,7 @@ export default async function OrganizationPage({
 
       <OrgTabs orgId={id} active={tab} />
 
+      {tab === 'executive' && <ExecutiveTab organizationId={id} isManager={!!isManager} />}
       {tab === 'dashboard' && <DashboardTab organizationId={id} />}
       {tab === 'overview' && <OverviewTab organizationId={id} metrics={metrics} />}
       {tab === 'departments' && <DepartmentsTab organizationId={id} isManager={!!isManager} />}
@@ -103,7 +108,7 @@ export default async function OrganizationPage({
       {tab === 'activity' && <ActivityTab organizationId={id} />}
       {tab === 'integrations' && <IntegrationsTab organizationId={id} isManager={!!isManager} error={Array.isArray(sp.error) ? sp.error[0] : sp.error} />}
       {tab === 'setup' && <SetupWizardTab organizationId={id} />}
-      {tab === 'campaign' && <CampaignTab organizationId={id} />}
+      {tab === 'campaign' && <CampaignTab organizationId={id} isManager={!!isManager} />}
       {tab === 'reports' && <ReportsTab organizationId={id} organizationName={org.name} />}
     </div>
   )
@@ -347,6 +352,12 @@ async function ActivityTab({ organizationId }: { organizationId: string }) {
   return <OrgActivityFeed activity={(activity as OrganizationActivity[]) || []} />
 }
 
+async function ExecutiveTab({ organizationId, isManager }: { organizationId: string; isManager: boolean }) {
+  const supabase = await createClient()
+  const data = await getExecutiveCommandCenterData(supabase, organizationId)
+  return <ExecutiveCommandCenter organizationId={organizationId} data={data} isManager={isManager} />
+}
+
 async function DashboardTab({ organizationId }: { organizationId: string }) {
   const supabase = await createClient()
   const data = await getBusinessDashboardData(supabase, organizationId)
@@ -373,14 +384,16 @@ async function SetupWizardTab({ organizationId }: { organizationId: string }) {
   return <SetupWizardPanel state={state} />
 }
 
-async function CampaignTab({ organizationId }: { organizationId: string }) {
+async function CampaignTab({ organizationId, isManager }: { organizationId: string; isManager: boolean }) {
   const supabase = await createClient()
-  const [state, integrations, meetings, meetingFunnel, activity] = await Promise.all([
+  const [state, integrations, meetings, meetingFunnel, activity, executive, experiments] = await Promise.all([
     getCampaignState(supabase, organizationId),
     getOrganizationIntegrations(supabase, organizationId),
     getMeetings(supabase, organizationId),
     getMeetingFunnel(supabase, organizationId),
     getSalesActivity(supabase, organizationId, 50),
+    getOrganizationExecutive(supabase, organizationId),
+    getExperiments(supabase, organizationId),
   ])
 
   // A goal can exist with no usable campaign behind it yet — e.g. launch
@@ -395,7 +408,16 @@ async function CampaignTab({ organizationId }: { organizationId: string }) {
 
   return (
     <div className="space-y-6">
-      <CampaignDashboard organizationId={organizationId} state={state} integrations={integrations} meetings={meetings} meetingFunnel={meetingFunnel} />
+      <CampaignDashboard
+        organizationId={organizationId}
+        state={state}
+        integrations={integrations}
+        meetings={meetings}
+        meetingFunnel={meetingFunnel}
+        autonomyLevel={executive?.autonomy_level ?? 2}
+        experiments={experiments}
+        isManager={isManager}
+      />
       <div>
         <h2 className="font-['Space_Grotesk'] font-bold text-lg mb-3">Activity Log</h2>
         <SalesActivityFeed activity={activity} />

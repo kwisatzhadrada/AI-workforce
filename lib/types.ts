@@ -1333,3 +1333,97 @@ export type ProductAnalyticsFunnel = {
   first_reply_received: number
   first_meeting_booked: number
 }
+
+export type AutonomyLevel = 0 | 1 | 2 | 3 | 4
+
+export type OrganizationExecutive = {
+  organization_id: string
+  autonomy_level: AutonomyLevel
+  default_subject_line: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type IcpResultContent = {
+  icp: { targetIndustry: string | null; companySize: string | null; location: string | null; icpDescription: string | null; setAt: string }
+  period_start: string
+  period_end: string
+  leads_found: number
+  emails_sent: number
+  replies_received: number
+  meetings_booked: number
+  reply_rate: number | null
+}
+
+export type OrganizationMemory = {
+  id: string
+  organization_id: string
+  memory_type: 'icp_result' | 'lesson_learned'
+  content: IcpResultContent | Record<string, unknown>
+  created_at: string
+}
+
+export type ExecutiveBriefPeriod = 'daily' | 'weekly' | 'monthly'
+
+export type ExecutiveBriefContent = {
+  what_happened: string[]
+  what_worked: string[]
+  what_failed: string[]
+  needs_attention: string[]
+  recommended_actions: string[]
+}
+
+export type ExecutiveBrief = {
+  id: string
+  organization_id: string
+  period_type: ExecutiveBriefPeriod
+  period_start: string
+  period_end: string
+  content: ExecutiveBriefContent
+  generated_by: string | null
+  created_at: string
+}
+
+export type ExperimentVariant = {
+  subject_line: string
+  sent?: number
+  replies?: number
+  reply_rate?: number
+}
+
+export type ExperimentStatus = 'running' | 'concluded'
+export type ExperimentWinner = 'a' | 'b' | 'tie'
+
+export type Experiment = {
+  id: string
+  organization_id: string
+  goal_id: string | null
+  experiment_type: 'subject_line'
+  variant_a: ExperimentVariant
+  variant_b: ExperimentVariant
+  status: ExperimentStatus
+  winner: ExperimentWinner | null
+  started_at: string
+  concluded_at: string | null
+  created_by: string | null
+}
+
+export type KnowledgeGraph = {
+  nodes: {
+    goals: number
+    agents: number
+    tasks: number
+    meetings: number
+    experiments: number
+  }
+  edges: {
+    goal_to_agent: { goal: string; agent: string }[]
+    agent_to_outcome: { agent: string; outcome: string }[]
+  }
+}
+
+export type PerformanceIntelligence = {
+  best_icp: { icp: IcpResultContent['icp']; reply_rate: number; meetings_booked: number } | null
+  best_message: { subject_line: string; reply_rate: string } | null
+  best_agent: { agent_name: string; meetings_booked: number; emails_sent: number } | null
+}

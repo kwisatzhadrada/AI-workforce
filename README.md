@@ -1,4 +1,4 @@
-# AI Workforce — B2B Sales Vertical: Real Integrations (v10, Stabilization Sprint 1, Campaign Experience Sprint, Customer Validation Sprint, Design Partner Sprint, Real Customer Value & Revenue Engine Sprint, Phase 19 — Design Partner Execution & Real World Validation)
+# AI Workforce — B2B Sales Vertical: Real Integrations (v10, Stabilization Sprint 1, Campaign Experience Sprint, Customer Validation Sprint, Design Partner Sprint, Real Customer Value & Revenue Engine Sprint, Phase 19 — Design Partner Execution & Real World Validation, Phase 20 — The AI Operating Executive)
 
 Give every AI worker a verifiable, discoverable identity. Built with **Next.js 16 (App Router)**, **TypeScript**, **Tailwind CSS**, and **Supabase** (Auth, Postgres).
 
@@ -550,6 +550,99 @@ actually want.
   declared its "last activity" variable as `int` instead of `timestamptz`
   (a straight type mismatch caught the moment the function actually ran).
 
+## Phase 20 — The AI Operating Executive
+
+The mission: stop being "a system users operate" and start being "a system
+that operates itself and reports results." The explicit constraint
+carried through every section — no new templates, no new workflow types,
+no new agent types, no new admin dashboards, reuse the existing
+architecture and make it smarter — shaped every design decision below.
+The Executive Agent is not a new row in `agents` (that would be a new
+agent type); it's a per-organization control-plane record
+(`organization_executive`) plus a set of RPCs that reason over goals,
+tasks, and `sales_activities` that already existed, and — at higher
+autonomy levels — call the same execution/approval paths a human would
+otherwise click through one at a time. There is still no background
+worker anywhere in this platform; every "autonomous" action here is still
+triggered by a human loading a page or clicking a button, just doing more
+per click at higher autonomy levels.
+
+- 🧠 **Organizational memory + a real learning system** — memory used to
+  be agent-level only (`agent_memory`, Phase 6). Relaunching a campaign
+  with a new ICP used to silently overwrite the old one; now
+  `launch_campaign_icp()` snapshots the OLD ICP and its real,
+  time-windowed outcomes into a new `organization_memory` table before
+  writing the new one — the window's start is the ICP's own recorded
+  `setAt` timestamp, not a guess. `generate_lessons_learned()` then
+  compares that real history (industries, company-size buckets, and
+  concluded A/B tests) and only ever states a lesson the data actually
+  supports — "not enough data yet" the rest of the time.
+- 📊 **Strategic recommendation engine** — `get_strategic_recommendations()`
+  combines existing rules (HubSpot not connected, reply rate too low/high,
+  drafts waiting for approval) with the learning system's real lessons
+  into one data-backed list. Nothing here is invented; every line traces
+  back to a real number.
+- 📰 **Executive briefings** — a new `executive_briefs` table generates
+  daily/weekly/monthly narratives in exactly five plain-business-language
+  sections: What Happened, What Worked, What Failed, Needs Attention,
+  Recommended Actions — no "tasks," "workflows," or "executions" anywhere
+  in the copy.
+- 🎚️ **Autonomy levels (0–4), each with a real behavioral difference** —
+  Level 0 (manual) through Level 2 (drafts, waits for approval — the
+  platform's real default behavior since the human-approval gate was
+  built) needed no new mechanics to describe honestly. Level 3 adds a
+  genuine one-click "Run Full Campaign" that chains the research and
+  drafting stages together instead of requiring two separate clicks
+  (sending still always needs approval — that gate never moves). Level 4
+  is the one place a concluded A/B test's winner gets applied
+  automatically instead of waiting for a manager's click, via a new
+  `organization_executive.default_subject_line` — set automatically by
+  `conclude_experiment()` at level 4, or by a manager's explicit "Apply
+  Winner" click (`apply_experiment_winner()`) at any lower level.
+- 🧪 **Experiment framework: subject-line A/B tests, fully wired** —
+  scoped to exactly one experiment type instead of exposing an ICP or
+  follow-up-timing picker that would quietly do nothing. `experiments` +
+  `experiment_assignments` (a deterministic per-email hash, so a rerun
+  never reassigns anyone) get wired directly into
+  `runEmailOutreachDraft()`: a running test's two subject lines are
+  actually used for a real send. `conclude_experiment()` computes real
+  reply rates per variant from `sales_activities` and picks a winner —
+  no estimate, no guess.
+- 🕸️ **Knowledge graph** — not a new graph database; `get_organization_
+  knowledge_graph()` is a real projection over the foreign-key
+  relationships that already exist (goals → plans → tasks → agents,
+  `sales_activities` → agents, meetings), assembled into one payload so
+  the Executive Agent — and the Command Center's "How Your Business
+  Connects" panel — can reason across the business without N separate
+  queries.
+- 🏆 **Performance intelligence** — `get_performance_intelligence()`
+  surfaces the best-performing ICP, subject line, and agent, all derived
+  from real outcomes (`organization_memory`, concluded experiments,
+  `sales_activities`) — "best campaign" and "best workflow" both honestly
+  collapse into "best ICP period," since a campaign here is an
+  ICP-targeted run of the one B2B Sales workflow this platform has, not a
+  separate trackable entity.
+- 🏛️ **Executive Command Center** — a new top-level tab (now the
+  organization page's default) answering the mission's own five
+  questions — are we growing, are campaigns working, what should we do
+  next, what's blocking success, where is revenue coming from — entirely
+  in business language, assembled from data every other tab already
+  computes. No tasks, workflows, agents, plans, executions, or database
+  structure anywhere in it.
+- 🧪 **Verified against a genuinely fresh local Postgres 16 instance**
+  (20 migrations total, no errors) — a real, end-to-end simulation: two
+  ICP relaunches (Manufacturing → Retail → Consulting) produced two real
+  `organization_memory` snapshots and a genuine "Manufacturing responded
+  while Retail had no replies" lesson; a subject-line experiment produced
+  a real 100%-vs-33% winner; autonomy level 4 auto-applied that winner
+  while level 2 required an explicit manual click; every new RPC and RLS
+  policy was exercised as the legitimate org owner/manager (succeeds) and
+  an unrelated outsider (blocked), in both directions. One real bug was
+  caught mid-testing: `generate_lessons_learned()`'s industry-comparison
+  query referenced a CTE (`ranked`) from a second, separate SQL statement
+  where it no longer existed — fixed by computing best/worst industry in
+  one pass with `array_agg(... order by ...)`.
+
 ## Getting started
 
 ### 1. Install dependencies
@@ -686,13 +779,16 @@ app/
     admin/verifications         – admin-only: approve pending verification requests
     organizations               – organization directory (search by name, pagination)
     organizations/new           – organization creation
-    organizations/[id]          – dashboard: Dashboard (default; Business Dashboard + CEO Mode
-                                   toggle + Business Outcomes) / Campaign (Command Center: ICP,
-                                   prospect pipeline, email queue, ROI, meetings, activity log) /
-                                   Reports (weekly/monthly/quarterly, print-to-PDF) / Integrations
-                                   as the primary, always-visible tabs — Overview / Departments /
-                                   Agents / Performance / Tasks / Workflows / Activity / Setup
-                                   Wizard collapse behind one "Advanced" toggle (via ?tab=)
+    organizations/[id]          – dashboard: Executive (default; recommendations, brief
+                                   generation, performance intelligence, knowledge graph,
+                                   autonomy level control) / Dashboard (Business Dashboard + CEO
+                                   Mode toggle + Business Outcomes) / Campaign (Command Center:
+                                   ICP, prospect pipeline, email queue, ROI, meetings, subject-line
+                                   A/B tests, activity log) / Reports (weekly/monthly/quarterly,
+                                   print-to-PDF) / Integrations as the primary, always-visible
+                                   tabs — Overview / Departments / Agents / Performance / Tasks /
+                                   Workflows / Activity / Setup Wizard collapse behind one
+                                   "Advanced" toggle (via ?tab=)
     support                      – ask a question / report a bug / request a feature as a real
                                    two-way conversation thread
     support/[id]                  – conversation thread: reply, and (admin) set status/priority
@@ -762,6 +858,10 @@ components/
                                    (ICP summary, prospect pipeline funnel, email queue funnel,
                                    ROI card), per-stage run button, prospects review list,
                                    drafts review + approve & send, pause/resume/stop controls
+  executive                      – Executive Command Center: autonomy level control, executive
+                                   brief generator, recommendations panel, performance
+                                   intelligence, knowledge graph summary, subject-line A/B test
+                                   panel, "Run Full Campaign" chained-stage button (autonomy 3+)
   meetings                       – meeting lifecycle panel: log a meeting, funnel summary,
                                    per-meeting status advance/cancel controls
   reports                        – customer success reports: generate weekly/monthly/quarterly,
@@ -783,6 +883,13 @@ components/
   support                        – unified activity timeline feed (admin debug tool),
                                    Intercom-like conversation thread + new-conversation form
 lib/
+  executive.ts                    – autonomy level get/set, strategic recommendations,
+                                   knowledge graph, performance intelligence
+  memory.ts                       – organization memory reads, lessons learned generation
+  briefs.ts                       – generate/list daily/weekly/monthly executive briefs
+  experiments.ts                   – create/list/conclude subject-line A/B tests, variant
+                                   assignment, manual/automatic winner application
+  executiveCommandCenter.ts        – composes the read-only bundle behind the Executive tab
   providers                     – ModelProvider abstraction: OpenAI, Anthropic, local/Ollama
   integrations                   – EmailProvider/CrmProvider/ProspectProvider abstraction: Gmail
                                    (OAuth2 + REST), HubSpot (private app token), Hunter.io (domain

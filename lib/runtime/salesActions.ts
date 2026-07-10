@@ -3,6 +3,7 @@ import { getCrmProvider, getEmailProvider, getProspectProvider } from '@/lib/int
 import { getProvider, ModelProviderName } from '@/lib/providers'
 import { OutreachDraft } from '@/lib/types'
 import { extractDomains } from '@/lib/utils'
+import { assignExperimentVariant, getRunningSubjectLineExperiment } from '@/lib/experiments'
 
 export type EnrichedLead = {
   name: string | null
@@ -143,6 +144,21 @@ export async function runEmailOutreachDraft(
   const drafts: OutreachDraft[] = []
   const failed: { email: string; error: string }[] = []
 
+  // If a subject-line A/B test is running for this organization, split
+  // leads between its two variants (a deterministic per-email hash, so
+  // reruns don't reassign anyone) instead of the one hardcoded subject
+  // line every draft used to get. This is the Experiment Framework's only
+  // currently-wired variant type — no ICP/follow-up-timing experiment
+  // changes anything yet. If no test is running, fall back to a previous
+  // test's winning subject line if one was applied (autonomy level 4
+  // applies it automatically; lower levels via an explicit manager click).
+  const experiment = await getRunningSubjectLineExperiment(supabase, params.organizationId)
+  const { data: executiveSettings } = await supabase
+    .from('organization_executive')
+    .select('default_subject_line')
+    .eq('organization_id', params.organizationId)
+    .maybeSingle()
+
   for (const lead of leads) {
     try {
       const draft = await model.generate({
@@ -151,12 +167,17 @@ export async function runEmailOutreachDraft(
         maxTokens: 300,
       })
 
+      const subjectTemplate = experiment
+        ? (((await assignExperimentVariant(supabase, experiment.id, lead.email)) === 'b' ? experiment.variant_b : experiment.variant_a).subject_line)
+        : executiveSettings?.default_subject_line || null
+      const subject = subjectTemplate ? subjectTemplate.replace('{company}', lead.company || lead.domain) : `Quick question for ${lead.company || lead.domain}`
+
       drafts.push({
         email: lead.email,
         name: lead.name,
         company: lead.company,
         domain: lead.domain,
-        subject: `Quick question for ${lead.company || lead.domain}`,
+        subject,
         body: draft.output,
       })
 

@@ -69,24 +69,6 @@ export async function launchCampaign(supabase: SupabaseClient, params: LaunchCam
   let goalId = existingGoal?.id as string | undefined
   let managerAgentId = existingGoal?.manager_agent_id as string | null | undefined
 
-  // target_metrics is an existing generic jsonb column on organization_goals
-  // (Phase 6) — reused here to hold the structured ICP fields (industry,
-  // company size, location) for the Campaign Command Center to display.
-  // No new column, no new table: the campaign launch form already collects
-  // exactly these fields, they just weren't kept anywhere queryable before.
-  const icpMetrics = {
-    icp: {
-      targetIndustry: params.targetIndustry || null,
-      companySize: params.companySize || null,
-      location: params.location || null,
-      icpDescription: params.icpDescription || null,
-    },
-  }
-
-  if (goalId) {
-    await supabase.from('organization_goals').update({ target_metrics: icpMetrics }).eq('id', goalId)
-  }
-
   if (!goalId) {
     // deploy_workforce_template() (Phase 9/10) already creates a "Generate
     // Leads" goal with its manager_agent_id set for any org deployed from
@@ -118,7 +100,6 @@ export async function launchCampaign(supabase: SupabaseClient, params: LaunchCam
         description: params.icpDescription || null,
         priority: 'high',
         manager_agent_id: anyGoal.manager_agent_id,
-        target_metrics: icpMetrics,
       })
       .select('id, manager_agent_id')
       .single()
@@ -132,6 +113,21 @@ export async function launchCampaign(supabase: SupabaseClient, params: LaunchCam
     return { goalId: goalId || null, domains: [], domainsSource: null, error: 'This organization has no manager agent to run the campaign — deploy the B2B Sales Team workforce first' }
   }
   const resolvedGoalId: string = goalId
+
+  // Writes the ICP onto organization_goals.target_metrics same as
+  // before, but through an RPC now instead of a raw update — this is
+  // also where a relaunch's OLD icp and its real, time-windowed outcomes
+  // get snapshotted into organization_memory before being overwritten
+  // (Phase 20's "organizational memory"), so that history isn't silently
+  // lost the way a direct update would lose it.
+  const { error: icpError } = await supabase.rpc('launch_campaign_icp', {
+    p_goal_id: resolvedGoalId,
+    p_target_industry: params.targetIndustry || null,
+    p_company_size: params.companySize || null,
+    p_location: params.location || null,
+    p_icp_description: params.icpDescription || null,
+  })
+  if (icpError) return { goalId: resolvedGoalId, domains: [], domainsSource: null, error: icpError.message }
 
   let domains: string[]
   let domainsSource: 'user' | 'ai_suggested'
