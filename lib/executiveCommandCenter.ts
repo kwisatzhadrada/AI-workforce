@@ -3,7 +3,9 @@ import { getOrganizationExecutive, getOrganizationKnowledgeGraph, getPerformance
 import { generateLessonsLearned } from './memory'
 import { getExecutiveBriefs } from './briefs'
 import { getExperiments } from './experiments'
-import { ExecutiveBrief, Experiment, KnowledgeGraph, OrganizationExecutive, PerformanceIntelligence } from './types'
+import { getOpportunities } from './opportunities'
+import { getRevenueAttribution } from './revenueAttribution'
+import { ExecutiveBrief, Experiment, KnowledgeGraph, Opportunities, OrganizationExecutive, PerformanceIntelligence, RevenueAttribution } from './types'
 
 export type ExecutiveCommandCenterData = {
   executive: OrganizationExecutive | null
@@ -13,6 +15,8 @@ export type ExecutiveCommandCenterData = {
   knowledgeGraph: KnowledgeGraph | null
   latestBrief: ExecutiveBrief | null
   experiments: Experiment[]
+  opportunities: Opportunities | null
+  revenueAttribution: RevenueAttribution | null
 }
 
 // One read-only bundle for the Executive Command Center — everything
@@ -21,7 +25,7 @@ export type ExecutiveCommandCenterData = {
 // this call (brief generation and experiment actions are separate,
 // explicit user actions with their own RPCs).
 export async function getExecutiveCommandCenterData(supabase: SupabaseClient, organizationId: string): Promise<ExecutiveCommandCenterData> {
-  const [executive, recommendations, lessons, performance, knowledgeGraph, briefs, experiments] = await Promise.all([
+  const [executive, recommendations, lessons, performance, knowledgeGraph, briefs, experiments, opportunities, revenueAttribution] = await Promise.all([
     getOrganizationExecutive(supabase, organizationId),
     getStrategicRecommendations(supabase, organizationId),
     generateLessonsLearned(supabase, organizationId),
@@ -29,6 +33,8 @@ export async function getExecutiveCommandCenterData(supabase: SupabaseClient, or
     getOrganizationKnowledgeGraph(supabase, organizationId),
     getExecutiveBriefs(supabase, organizationId),
     getExperiments(supabase, organizationId),
+    getOpportunities(supabase, organizationId),
+    getRevenueAttribution(supabase, organizationId),
   ])
 
   return {
@@ -39,5 +45,7 @@ export async function getExecutiveCommandCenterData(supabase: SupabaseClient, or
     knowledgeGraph,
     latestBrief: briefs[0] || null,
     experiments,
+    opportunities,
+    revenueAttribution,
   }
 }

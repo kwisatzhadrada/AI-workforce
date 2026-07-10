@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { CampaignState } from '@/lib/campaigns'
-import { IntegrationProvider, Meeting, MeetingFunnel, OrganizationIntegration, OutreachDraft } from '@/lib/types'
+import { IntegrationProvider, Meeting, MeetingFunnel, NextBestAction, OrganizationIntegration, OutreachDraft, ReplyClassification } from '@/lib/types'
 import RunStageButton from './RunStageButton'
 import ProspectsList from './ProspectsList'
 import DraftsReview from './DraftsReview'
@@ -15,6 +15,7 @@ import CampaignRoiCard from './CampaignRoiCard'
 import MeetingsPanel from '@/components/meetings/MeetingsPanel'
 import RunFullCampaignButton from '@/components/executive/RunFullCampaignButton'
 import ExperimentsPanel from '@/components/executive/ExperimentsPanel'
+import NextBestActionPanel from './NextBestActionPanel'
 import { Experiment } from '@/lib/types'
 
 type Lead = { name: string | null; email: string; title: string | null; company: string | null; domain: string }
@@ -56,6 +57,8 @@ export default function CampaignDashboard({
   autonomyLevel,
   experiments,
   isManager,
+  nextBestActions,
+  replyClassifications,
 }: {
   organizationId: string
   state: CampaignState
@@ -65,6 +68,8 @@ export default function CampaignDashboard({
   autonomyLevel: number
   experiments: Experiment[]
   isManager: boolean
+  nextBestActions: NextBestAction[]
+  replyClassifications: ReplyClassification[]
 }) {
   const { goal, stages, metrics, icp, pipeline, emailQueue, roi } = state
   if (!goal) return null
@@ -206,6 +211,8 @@ export default function CampaignDashboard({
         <h3 className="font-medium text-[#EDEAF8]">Check for Replies</h3>
         <CheckRepliesButton organizationId={organizationId} />
       </div>
+
+      <NextBestActionPanel nextBestActions={nextBestActions} replyClassifications={replyClassifications} />
 
       <MeetingsPanel organizationId={organizationId} meetings={meetings} funnel={meetingFunnel} />
 

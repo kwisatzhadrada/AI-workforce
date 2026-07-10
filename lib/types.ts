@@ -1150,6 +1150,9 @@ export type Meeting = {
   created_by: string | null
   created_at: string
   updated_at: string
+  deal_outcome: DealOutcome | null
+  deal_value: number | null
+  deal_closed_at: string | null
 }
 
 export type MeetingFunnel = {
@@ -1369,6 +1372,7 @@ export type ExecutiveBriefContent = {
   what_happened: string[]
   what_worked: string[]
   what_failed: string[]
+  what_changed: string[]
   needs_attention: string[]
   recommended_actions: string[]
 }
@@ -1426,4 +1430,87 @@ export type PerformanceIntelligence = {
   best_icp: { icp: IcpResultContent['icp']; reply_rate: number; meetings_booked: number } | null
   best_message: { subject_line: string; reply_rate: string } | null
   best_agent: { agent_name: string; meetings_booked: number; emails_sent: number } | null
+}
+
+export type JobType = 'check_replies' | 'sync_crm' | 'generate_brief' | 'evaluate_experiment' | 'health_check' | 'progress_campaign' | 'compute_daily_rollup'
+export type JobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'retrying' | 'cancelled'
+
+export type Job = {
+  id: string
+  organization_id: string | null
+  job_type: JobType
+  payload: Record<string, unknown>
+  status: JobStatus
+  priority: number
+  attempts: number
+  scheduled_for: string
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  organizations?: Pick<Organization, 'id' | 'name'>
+}
+
+export type JobFailure = {
+  id: string
+  job_id: string
+  run_id: string | null
+  organization_id: string | null
+  job_type: JobType
+  error_message: string
+  will_retry: boolean
+  resolved: boolean
+  created_at: string
+  organizations?: Pick<Organization, 'id' | 'name'>
+}
+
+export type ReplyClassificationType = 'interested' | 'not_interested' | 'unsubscribe' | 'objection' | 'meeting_request' | 'referral' | 'wrong_contact'
+
+export type ReplyClassification = {
+  id: string
+  organization_id: string
+  sales_activity_id: string | null
+  contact_email: string
+  contact_name: string | null
+  classification: ReplyClassificationType
+  confidence: number | null
+  reasoning: string | null
+  action_items: string[]
+  created_at: string
+}
+
+export type NextBestAction = {
+  contact_email: string
+  contact_name: string | null
+  classification: ReplyClassificationType
+  days_since: number
+  suggested_action: string
+}
+
+export type Opportunities = {
+  stalled_campaign: boolean
+  high_value_prospects: { contact_email: string; contact_name: string | null; estimated_value: number }[]
+  winning_icp: IcpResultContent['icp'] | null
+  failing_icp: IcpResultContent['icp'] | null
+}
+
+export type DealOutcome = 'won' | 'lost'
+
+export type RevenueAttribution = {
+  pipeline_open: number
+  revenue_won: number
+  revenue_lost: number
+  by_icp: { industry: string; revenue_won: number }[]
+  by_subject_line: { subject_line: string; revenue_won: number }[]
+}
+
+export type AuditLogEntry = {
+  id: string
+  organization_id: string | null
+  actor_id: string | null
+  action: string
+  target_type: string | null
+  target_id: string | null
+  metadata: Record<string, unknown>
+  created_at: string
+  profiles?: Pick<Profile, 'id' | 'full_name'>
 }

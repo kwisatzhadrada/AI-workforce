@@ -12,6 +12,8 @@ import DepartmentsPanel from '@/components/organizations/DepartmentsPanel'
 import AgentAssignmentsPanel from '@/components/organizations/AgentAssignmentsPanel'
 import OrgPerformancePanel from '@/components/organizations/OrgPerformancePanel'
 import OrgActivityFeed from '@/components/organizations/OrgActivityFeed'
+import AuditLogFeed from '@/components/organizations/AuditLogFeed'
+import { getAuditLog } from '@/lib/audit'
 import CreateWorkflowForm from '@/components/organizations/CreateWorkflowForm'
 import WorkflowCard from '@/components/organizations/WorkflowCard'
 import WorkflowRunsList from '@/components/organizations/WorkflowRunsList'
@@ -34,6 +36,7 @@ import ExecutiveCommandCenter from '@/components/executive/ExecutiveCommandCente
 import { getExecutiveCommandCenterData } from '@/lib/executiveCommandCenter'
 import { getOrganizationExecutive } from '@/lib/executive'
 import { getExperiments } from '@/lib/experiments'
+import { getNextBestAction, getReplyClassifications } from '@/lib/replyIntelligence'
 
 export const dynamic = 'force-dynamic'
 
@@ -348,8 +351,17 @@ async function ActivityTab({ organizationId }: { organizationId: string }) {
     .eq('organization_id', organizationId)
     .order('created_at', { ascending: false })
     .limit(50)
+  const auditEntries = await getAuditLog(supabase, organizationId)
 
-  return <OrgActivityFeed activity={(activity as OrganizationActivity[]) || []} />
+  return (
+    <div className="space-y-6">
+      <OrgActivityFeed activity={(activity as OrganizationActivity[]) || []} />
+      <div>
+        <h3 className="font-medium text-[#EDEAF8] mb-3">Audit Trail</h3>
+        <AuditLogFeed entries={auditEntries} />
+      </div>
+    </div>
+  )
 }
 
 async function ExecutiveTab({ organizationId, isManager }: { organizationId: string; isManager: boolean }) {
@@ -386,7 +398,7 @@ async function SetupWizardTab({ organizationId }: { organizationId: string }) {
 
 async function CampaignTab({ organizationId, isManager }: { organizationId: string; isManager: boolean }) {
   const supabase = await createClient()
-  const [state, integrations, meetings, meetingFunnel, activity, executive, experiments] = await Promise.all([
+  const [state, integrations, meetings, meetingFunnel, activity, executive, experiments, nextBestActions, replyClassifications] = await Promise.all([
     getCampaignState(supabase, organizationId),
     getOrganizationIntegrations(supabase, organizationId),
     getMeetings(supabase, organizationId),
@@ -394,6 +406,8 @@ async function CampaignTab({ organizationId, isManager }: { organizationId: stri
     getSalesActivity(supabase, organizationId, 50),
     getOrganizationExecutive(supabase, organizationId),
     getExperiments(supabase, organizationId),
+    getNextBestAction(supabase, organizationId),
+    getReplyClassifications(supabase, organizationId, 20),
   ])
 
   // A goal can exist with no usable campaign behind it yet — e.g. launch
@@ -417,6 +431,8 @@ async function CampaignTab({ organizationId, isManager }: { organizationId: stri
         autonomyLevel={executive?.autonomy_level ?? 2}
         experiments={experiments}
         isManager={isManager}
+        nextBestActions={nextBestActions}
+        replyClassifications={replyClassifications}
       />
       <div>
         <h2 className="font-['Space_Grotesk'] font-bold text-lg mb-3">Activity Log</h2>

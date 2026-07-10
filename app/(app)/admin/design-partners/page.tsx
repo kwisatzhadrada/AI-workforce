@@ -5,6 +5,8 @@ import { getDesignPartnerCohort, getDesignPartners } from '@/lib/designPartners'
 import { getAllFeedback } from '@/lib/feedback'
 import { getOrganizationHealth } from '@/lib/health'
 import { getRevenueMetrics } from '@/lib/revenue'
+import { getRevenueAttribution } from '@/lib/revenueAttribution'
+import { getAllConversations } from '@/lib/supportConversations'
 import DesignPartnerRow, { DesignPartnerRowData } from '@/components/admin/DesignPartnerRow'
 import DesignPartnerCohortPanel from '@/components/admin/DesignPartnerCohortPanel'
 import RevenueMetricsPanel from '@/components/admin/RevenueMetricsPanel'
@@ -19,12 +21,13 @@ export default async function DesignPartnersPage() {
   const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single()
   if (!profile?.is_admin) redirect('/agents')
 
-  const [usageRows, designPartners, feedback, cohort, revenueMetrics, { data: orgFields }] = await Promise.all([
+  const [usageRows, designPartners, feedback, cohort, revenueMetrics, allConversations, { data: orgFields }] = await Promise.all([
     getAnalyticsByOrganization(supabase),
     getDesignPartners(supabase),
     getAllFeedback(supabase),
     getDesignPartnerCohort(supabase),
     getRevenueMetrics(supabase),
+    getAllConversations(supabase),
     supabase.from('organizations').select('id, industry, company_size'),
   ])
 
@@ -36,13 +39,28 @@ export default async function DesignPartnersPage() {
     feedbackCountByOrg.set(f.organization_id, (feedbackCountByOrg.get(f.organization_id) || 0) + 1)
   }
 
-  // Health scores are a real query per tracked partner, not per every
-  // organization on the platform — cheap at design-partner scale (a
-  // handful of rows), and skipped entirely for orgs nobody is tracking.
+  // Open support conversations per organization — real counts from the
+  // same conversations already shown on /admin/support, not a new query path.
+  const openConversationsByOrg = new Map<string, number>()
+  for (const c of allConversations) {
+    if (!c.organization_id || c.status === 'resolved' || c.status === 'closed') continue
+    openConversationsByOrg.set(c.organization_id, (openConversationsByOrg.get(c.organization_id) || 0) + 1)
+  }
+
+  // Health scores and revenue attribution are real queries per tracked
+  // partner, not per every organization on the platform — cheap at
+  // design-partner scale (a handful of rows), and skipped entirely for
+  // orgs nobody is tracking.
   const healthByOrg = new Map<string, Awaited<ReturnType<typeof getOrganizationHealth>>>()
+  const revenueByOrg = new Map<string, Awaited<ReturnType<typeof getRevenueAttribution>>>()
   await Promise.all(
     designPartners.map(async (p) => {
-      healthByOrg.set(p.organization_id, await getOrganizationHealth(supabase, p.organization_id))
+      const [health, attribution] = await Promise.all([
+        getOrganizationHealth(supabase, p.organization_id),
+        getRevenueAttribution(supabase, p.organization_id),
+      ])
+      healthByOrg.set(p.organization_id, health)
+      revenueByOrg.set(p.organization_id, attribution)
     })
   )
 
@@ -50,6 +68,7 @@ export default async function DesignPartnersPage() {
     const partner = partnerByOrg.get(u.organization_id)
     const orgFields = orgFieldsById.get(u.organization_id)
     const health = healthByOrg.get(u.organization_id)
+    const attribution = revenueByOrg.get(u.organization_id)
 
     return {
       organizationId: u.organization_id,
@@ -70,6 +89,9 @@ export default async function DesignPartnersPage() {
       repliesReceived: u.replies_received,
       meetingsBooked: u.meetings_booked,
       healthStatus: health?.health_status || null,
+      revenueWon: attribution?.revenue_won ?? null,
+      pipelineOpen: attribution?.pipeline_open ?? null,
+      openSupportConversations: openConversationsByOrg.get(u.organization_id) || 0,
     }
   })
 

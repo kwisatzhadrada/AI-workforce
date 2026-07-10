@@ -2,7 +2,9 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getOrganizationTimeline } from '@/lib/support'
+import { getJobFailures } from '@/lib/jobs'
 import TimelineFeed from '@/components/support/TimelineFeed'
+import ErrorCenterPanel from '@/components/support/ErrorCenterPanel'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,6 +30,7 @@ export default async function AdminSupportPage({
 
   const timeline = orgId ? await getOrganizationTimeline(supabase, orgId, 100) : []
   const { data: org } = orgId ? await supabase.from('organizations').select('id, name').eq('id', orgId).maybeSingle() : { data: null }
+  const jobFailures = await getJobFailures(supabase)
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -35,6 +38,8 @@ export default async function AdminSupportPage({
         <h1 className="font-['Space_Grotesk'] text-2xl font-bold">Support Tools</h1>
         <p className="text-[#8A88A8] text-sm mt-1">Find an organization to see its full activity timeline or export its state for debugging.</p>
       </div>
+
+      <ErrorCenterPanel failures={jobFailures} />
 
       <form action="/admin/support" className="flex gap-2">
         <input

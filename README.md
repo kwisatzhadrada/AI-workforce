@@ -643,6 +643,133 @@ per click at higher autonomy levels.
   where it no longer existed — fixed by computing best/worst industry in
   one pass with `array_agg(... order by ...)`.
 
+## Phase 21 — From AI Workforce Platform to AI Company Operator
+
+The mission: stop adding platform concepts and prove the system can create
+real business value — revenue generation, autonomous operation, real-world
+execution, reliability, and design partner success, nothing else. No new
+templates, marketplaces, social features, or admin dashboards; every
+addition below extends an existing surface or reuses an existing execution
+path.
+
+- ⏱️ **Autonomous runtime infrastructure — the one genuine architectural
+  change this phase required.** Every prior phase's "no background worker"
+  was really "no execution with nobody logged in," because every RPC
+  assumed a real authenticated org member. A new `job_queue` /
+  `job_runs` / `job_failures` / `retry_schedule` set of tables gives the
+  platform a real state machine (`queued → running → {completed | retrying
+  → queued | failed}`), claimed with `for update skip locked` for
+  concurrent-safe atomic dequeuing. `app/api/cron/process-jobs` — triggered
+  hourly by Vercel Cron (`vercel.json`) — schedules recurring jobs per
+  organization (reply checks, CRM sync, executive briefs, experiment
+  evaluation, health checks, daily rollups, and campaign progression for
+  organizations at autonomy level 3+) and processes claimed jobs through
+  `lib/runtime/jobHandlers.ts`, which reuses the exact same
+  `runAgentExecution()` and business-logic RPCs a human's button click
+  already used — no parallel "background" logic to drift out of sync. A
+  new `is_system_caller()` SQL helper (`auth.role() = 'service_role'`,
+  Supabase's own documented mechanism) is added as an explicit,
+  named-allowlist OR-bypass to the handful of existing RPCs the worker
+  needs; the four job-queue-management RPCs
+  (`claim_next_jobs_system`/`start_job_run_system`/`complete_job_system`/
+  `fail_job_system`) are real service-role-only functions, `REVOKE`d from
+  `public`/`anon`/`authenticated` and `GRANT`ed only to `service_role`. The
+  service-role key itself (`lib/supabase/service.ts`) is never referenced
+  anywhere a browser can reach — only inside the cron route, gated first
+  by a `CRON_SECRET` bearer check before any database access happens.
+- 📥 **AI Sales Operator** — replies are no longer just logged, they're
+  understood. `lib/runtime/replyClassifier.ts` asks an LLM for structured
+  JSON (`classification` / `confidence` / `reasoning` / `action_items`),
+  validated against a fixed 7-category allowlist (interested, not
+  interested, unsubscribe, objection, meeting request, referral, wrong
+  contact) and stored via a new `record_reply_classification()` RPC — used
+  identically by a real user's "Check Replies" click and the cron worker.
+  A `meeting_request` classification automatically calls the existing
+  `create_meeting` RPC (Phase 18), so a scheduling request surfaces on the
+  Meetings panel with zero manual step. `get_next_best_action()` computes
+  real follow-up intelligence — the latest classification per contact
+  checked against whether a subsequent `email_sent`/`meeting_booked`
+  activity ever followed it — ordered most-overdue-first, shown alongside
+  recent classifications in a new Follow-Up Intelligence panel on the
+  Campaign Command Center.
+- 🎯 **Opportunity detection** — `get_opportunities()` surfaces a stalled
+  campaign (active, unpaused, but no outreach activity in 7 days), the top
+  5 highest-value scheduled/completed meetings, and the best/worst
+  reply-rate ICP from real `organization_memory` snapshots — all shown in
+  a new Opportunities panel on the Executive Command Center.
+- 📈 **Revenue Operating System** — `meetings` gained `deal_outcome`
+  (won/lost), `deal_value`, and `deal_closed_at` columns, set by a human
+  via a new `record_deal_outcome()` RPC (now available directly on
+  completed meetings in the Meetings panel — enter a value, click Won or
+  Lost). `get_revenue_attribution()` computes real, event-driven
+  pipeline/won/lost totals and attributes revenue to the ICP that was live
+  when the deal's meeting happened (time-window join against
+  `organization_memory`) and to the subject-line variant the contact was
+  assigned (join against `experiment_assignments`) — with honest "Unknown"
+  / "No experiment" fallbacks rather than a fabricated attribution when
+  none exists. Shown in a new Revenue Attribution panel on the Executive
+  Command Center. This is deliberately a separate concept from Phase 19's
+  `revenue_events`/`get_revenue_metrics` (this platform's own admin-only
+  subscription revenue) — Phase 21 tracks a design partner's *own*
+  campaign/deal revenue.
+- 🗓️ **Executive brief: What Changed** — `generate_executive_brief()` now
+  computes a real period-over-period comparison (this period vs. the
+  immediately preceding period of the same length) for emails sent and
+  replies received, inserted as a new fifth section between "What Failed"
+  and "Needs Attention" — the same honest-or-silent standard as the
+  original four sections applies: a real number moved, or nothing is said.
+- 🛠️ **Error Center** — every job failure (`job_failures`, populated by
+  `fail_job_system()`) is now visible platform-wide on `/admin/support` via
+  a new `ErrorCenterPanel`, showing organization, job type, retrying/failed
+  status, the real error message, and a "Mark resolved" action
+  (`resolve_job_failure()`).
+- 📜 **Audit log** — a small, deliberately scoped response to "replace
+  `is_admin()` with scoped roles": a full RBAC rip-and-replace touches 77
+  usages across 10 migration files and was assessed as too large to
+  execute safely without a dedicated regression suite in one phase.
+  Instead, a new `audit_log` table + `log_audit_event()` helper is called
+  from the specific sensitive actions the mission named — autonomy level
+  changes, experiment conclusions/winner applications, revenue events,
+  campaign launches, deal outcomes — visible to admins and org managers on
+  a new Audit Trail feed on each organization's Activity tab
+  (`AuditLogFeed.tsx`). The full RBAC migration remains real future work,
+  not something this phase claims to have finished.
+- 🧮 **Performance: materialized daily rollup** — a real, if partial, step
+  toward incremental aggregation instead of full-history scans:
+  `organization_metrics_daily` is populated once a day per organization by
+  the `compute_daily_rollup` job. It is not yet wired to replace every
+  existing full-history-scanning read (documented here honestly as future
+  work, not overclaimed as complete).
+- 🏢 **Design Partner Ops Center: revenue + support status** — the
+  existing `/admin/design-partners` page (no new dashboard, per the
+  mission's own rule) now shows each design partner's real revenue won,
+  open pipeline (via `get_revenue_attribution`), and open support
+  conversation count (via the existing `support_conversations` table) —
+  risk level was already covered by the existing health-status badge.
+- 🧪 **A reusable Postgres regression script** —
+  `scripts/test_critical_paths.sh` (plus `scripts/sql/bootstrap_test_auth.sql`
+  and `scripts/sql/critical_path_fixture.sql`) drops and recreates a fresh
+  local database, applies all 21 migrations in order, loads a small owner
+  / outsider / admin fixture, and runs 19 checks as real Postgres roles
+  with real `request.jwt.claim.*` GUCs set — covering `is_system_caller()`,
+  the job queue's service-role-only functions (including a real
+  Postgres-level `permission denied`, not just an app-level rejection, for
+  an authenticated caller), reply classification, deal outcomes, revenue
+  attribution, and audit log RLS, each proven in both directions (the
+  legitimate owner succeeds, an unrelated outsider is blocked). This
+  replaces what used to be ad hoc, uncommitted Bash testing with a durable
+  asset any future phase can re-run.
+- 🧪 **Verified against a genuinely fresh local Postgres 16 instance** (21
+  migrations total, no errors) — `scripts/test_critical_paths.sh` above
+  passing 19/19 checks end to end is that verification, committed to the
+  repo rather than performed ad hoc. Two real bugs were caught and fixed
+  during this process (both in the test setup, not the app): the
+  `handle_new_user()` trigger silently creates a `profiles` row on
+  `auth.users` insert, so the fixture's own `on conflict do nothing` was
+  never actually setting the test admin's `is_admin = true` — fixed with
+  `on conflict do update`; and a `numeric(14,2)` revenue comparison needed
+  `7500.00`, not `7500`, since Postgres preserves the declared scale.
+
 ## Getting started
 
 ### 1. Install dependencies

@@ -8,6 +8,10 @@ import { upsertDesignPartner } from '@/lib/designPartners'
 import { DesignPartnerStatus, HealthStatus } from '@/lib/types'
 import HealthBadge from './HealthBadge'
 
+function formatDealCurrency(value: number): string {
+  return value.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+}
+
 const STATUS_COLOR: Record<DesignPartnerStatus, string> = {
   prospect: 'text-gray-400 bg-gray-400/10 border-gray-400/20',
   contacted: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20',
@@ -47,6 +51,9 @@ export type DesignPartnerRowData = {
   repliesReceived: number
   meetingsBooked: number
   healthStatus: HealthStatus | null
+  revenueWon: number | null
+  pipelineOpen: number | null
+  openSupportConversations: number
 }
 
 export default function DesignPartnerRow({ data }: { data: DesignPartnerRowData }) {
@@ -107,6 +114,23 @@ export default function DesignPartnerRow({ data }: { data: DesignPartnerRowData 
         <div><div className="text-[#8A88A8]">Emails Sent</div><div className="text-[#EDEAF8] tabular-nums">{data.emailsSent}</div></div>
         <div><div className="text-[#8A88A8]">Replies</div><div className="text-[#EDEAF8] tabular-nums">{data.repliesReceived}</div></div>
         <div><div className="text-[#8A88A8]">Meetings</div><div className="text-[#EDEAF8] tabular-nums">{data.meetingsBooked}</div></div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs mb-2 pt-2 border-t border-[#3C3A58]/30">
+        <div>
+          <div className="text-[#8A88A8]">Revenue Won</div>
+          <div className="text-green-400 tabular-nums">{data.revenueWon != null ? formatDealCurrency(data.revenueWon) : '—'}</div>
+        </div>
+        <div>
+          <div className="text-[#8A88A8]">Open Pipeline</div>
+          <div className="text-[#EDEAF8] tabular-nums">{data.pipelineOpen != null ? formatDealCurrency(data.pipelineOpen) : '—'}</div>
+        </div>
+        <div>
+          <div className="text-[#8A88A8]">Support</div>
+          <div className={`tabular-nums ${data.openSupportConversations > 0 ? 'text-yellow-400' : 'text-[#EDEAF8]'}`}>
+            {data.openSupportConversations > 0 ? `${data.openSupportConversations} open` : 'All clear'}
+          </div>
+        </div>
       </div>
 
       {!editing && (

@@ -4,6 +4,8 @@ import ExecutiveBriefPanel from './ExecutiveBriefPanel'
 import RecommendationsPanel from './RecommendationsPanel'
 import PerformanceIntelligencePanel from './PerformanceIntelligencePanel'
 import KnowledgeGraphSummary from './KnowledgeGraphSummary'
+import OpportunitiesPanel from './OpportunitiesPanel'
+import RevenueAttributionPanel from './RevenueAttributionPanel'
 
 // The mission's own success criteria: a business owner should be able to
 // answer "are we growing, are campaigns working, what should we do next,
@@ -20,7 +22,9 @@ export default function ExecutiveCommandCenter({ organizationId, data, isManager
       </div>
 
       <RecommendationsPanel recommendations={data.recommendations} />
+      <OpportunitiesPanel opportunities={data.opportunities} />
       <ExecutiveBriefPanel organizationId={organizationId} brief={data.latestBrief} />
+      <RevenueAttributionPanel attribution={data.revenueAttribution} />
       <PerformanceIntelligencePanel performance={data.performance} />
       <KnowledgeGraphSummary graph={data.knowledgeGraph} />
       <AutonomyLevelControl organizationId={organizationId} level={data.executive?.autonomy_level ?? 2} isManager={isManager} />

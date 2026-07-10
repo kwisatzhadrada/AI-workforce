@@ -4,8 +4,13 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { createMeeting, updateMeetingStatus } from '@/lib/meetings'
-import { Meeting, MeetingFunnel, MeetingStatus } from '@/lib/types'
+import { recordDealOutcome } from '@/lib/revenueAttribution'
+import { DealOutcome, Meeting, MeetingFunnel, MeetingStatus } from '@/lib/types'
 import { formatTimeAgo } from '@/lib/utils'
+
+function formatDealValue(value: number): string {
+  return value.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+}
 
 const STATUS_COLOR: Record<MeetingStatus, string> = {
   requested: 'text-gray-400 bg-gray-400/10 border-gray-400/20',
@@ -19,6 +24,39 @@ const NEXT_STATUS: Record<MeetingStatus, MeetingStatus | null> = {
   scheduled: 'completed',
   completed: null,
   cancelled: null,
+}
+
+function DealOutcomeForm({ meeting }: { meeting: Meeting }) {
+  const supabase = createClient()
+  const router = useRouter()
+  const [value, setValue] = useState('')
+  const [saving, setSaving] = useState<DealOutcome | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  async function record(outcome: DealOutcome) {
+    setSaving(outcome)
+    setError(null)
+    const { error } = await recordDealOutcome(supabase, meeting.id, outcome, value.trim() ? Number(value) : null)
+    setSaving(null)
+    if (error) { setError(error); return }
+    router.refresh()
+  }
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap justify-end">
+      <input
+        type="number" min={0} value={value} onChange={(e) => setValue(e.target.value)} placeholder="Deal value ($)"
+        className="w-32 bg-[#121428] border border-[#3C3A58] text-[#EDEAF8] rounded-lg px-2 py-1 text-xs outline-none focus:border-[#6D28D9]"
+      />
+      <button onClick={() => record('won')} disabled={saving !== null} className="text-xs px-2 py-1 rounded-md bg-green-500/20 border border-green-400/30 text-green-400 hover:bg-green-500/30 disabled:opacity-50">
+        {saving === 'won' ? 'Saving...' : 'Won'}
+      </button>
+      <button onClick={() => record('lost')} disabled={saving !== null} className="text-xs px-2 py-1 rounded-md bg-red-500/20 border border-red-400/30 text-red-400 hover:bg-red-500/30 disabled:opacity-50">
+        {saving === 'lost' ? 'Saving...' : 'Lost'}
+      </button>
+      {error && <div className="text-xs text-red-400 w-full text-right">{error}</div>}
+    </div>
+  )
 }
 
 function MeetingRow({ meeting }: { meeting: Meeting }) {
@@ -45,26 +83,39 @@ function MeetingRow({ meeting }: { meeting: Meeting }) {
   const next = NEXT_STATUS[meeting.status]
 
   return (
-    <div className="flex items-center justify-between gap-3 py-2 border-b border-[#3C3A58]/20 last:border-0">
-      <div className="min-w-0">
-        <div className="text-sm text-[#EDEAF8] truncate">{meeting.contact_name || meeting.contact_email}</div>
-        <div className="text-xs text-[#8A88A8] truncate">
-          {meeting.contact_company ? `${meeting.contact_company} · ` : ''}{formatTimeAgo(meeting.created_at)}
+    <div className="py-2 border-b border-[#3C3A58]/20 last:border-0 space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-sm text-[#EDEAF8] truncate">{meeting.contact_name || meeting.contact_email}</div>
+          <div className="text-xs text-[#8A88A8] truncate">
+            {meeting.contact_company ? `${meeting.contact_company} · ` : ''}{formatTimeAgo(meeting.created_at)}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className={`text-xs px-2 py-0.5 rounded-md border capitalize ${STATUS_COLOR[meeting.status]}`}>{meeting.status}</span>
+          {next && (
+            <button onClick={advance} disabled={saving} className="text-xs px-2 py-1 rounded-md bg-[#6D28D9] hover:bg-[#5B21B6] disabled:opacity-50 text-white">
+              Mark {next}
+            </button>
+          )}
+          {meeting.status !== 'cancelled' && meeting.status !== 'completed' && (
+            <button onClick={cancel} disabled={saving} className="text-xs px-2 py-1 rounded-md border border-[#3C3A58] text-[#8A88A8] hover:text-red-400 hover:border-red-400/40 disabled:opacity-50">
+              Cancel
+            </button>
+          )}
         </div>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        <span className={`text-xs px-2 py-0.5 rounded-md border capitalize ${STATUS_COLOR[meeting.status]}`}>{meeting.status}</span>
-        {next && (
-          <button onClick={advance} disabled={saving} className="text-xs px-2 py-1 rounded-md bg-[#6D28D9] hover:bg-[#5B21B6] disabled:opacity-50 text-white">
-            Mark {next}
-          </button>
-        )}
-        {meeting.status !== 'cancelled' && meeting.status !== 'completed' && (
-          <button onClick={cancel} disabled={saving} className="text-xs px-2 py-1 rounded-md border border-[#3C3A58] text-[#8A88A8] hover:text-red-400 hover:border-red-400/40 disabled:opacity-50">
-            Cancel
-          </button>
-        )}
-      </div>
+      {meeting.status === 'completed' && (
+        meeting.deal_outcome ? (
+          <div className="text-xs text-right">
+            <span className={meeting.deal_outcome === 'won' ? 'text-green-400' : 'text-red-400'}>
+              Deal {meeting.deal_outcome}{meeting.deal_value != null ? ` · ${formatDealValue(meeting.deal_value)}` : ''}
+            </span>
+          </div>
+        ) : (
+          <DealOutcomeForm meeting={meeting} />
+        )
+      )}
     </div>
   )
 }

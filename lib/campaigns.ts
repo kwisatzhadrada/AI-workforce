@@ -177,6 +177,16 @@ export async function launchCampaign(supabase: SupabaseClient, params: LaunchCam
   // itself succeeded); it's a best-effort tracking call.
   await supabase.rpc('record_campaign_launched', { p_org_id: params.organizationId, p_metadata: { domains_source: domainsSource, domain_count: domains.length } })
 
+  // Autonomy level 3+ ("AI chains stages together"): the freshly-launched
+  // campaign starts progressing on its own the next time the job queue
+  // runs, instead of waiting for a "Run Full Campaign" click. Best-effort,
+  // same as the analytics event above — a queue failure shouldn't fail a
+  // launch that otherwise succeeded.
+  const { data: executive } = await supabase.from('organization_executive').select('autonomy_level').eq('organization_id', params.organizationId).maybeSingle()
+  if ((executive?.autonomy_level ?? 2) >= 3) {
+    await supabase.rpc('enqueue_job', { p_org_id: params.organizationId, p_job_type: 'progress_campaign', p_payload: {} })
+  }
+
   return { goalId: resolvedGoalId, domains, domainsSource, error: null }
 }
 

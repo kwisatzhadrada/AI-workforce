@@ -1,6 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { getCrmProvider, getEmailProvider } from '@/lib/integrations'
 import { SalesActivity } from '@/lib/types'
+import { classifyReply } from './replyClassifier'
 
 export type CheckRepliesResult = {
   checked: number
@@ -9,11 +10,12 @@ export type CheckRepliesResult = {
   error: string | null
 }
 
-// Reply detection is on-demand, not a background poll — same "no cron in
-// this stack" pattern every prior phase uses for anything that would
-// otherwise need a scheduler (goal cycles, prediction refresh, workflow
-// advance). An org member clicks "Check Replies"; this walks every sent
-// email that hasn't been marked replied-to yet and asks Gmail for real.
+// Reply detection used to be strictly on-demand (a human clicks "Check
+// Replies"). Phase 21's job queue can now call this exact same function
+// on a schedule via the service-role client — record_sales_activity and
+// create_meeting both accept a service-role caller (is_system_caller()),
+// so this function works identically whichever caller invokes it, and
+// classification/meeting-detection happens the same way either way.
 export async function checkRepliesForOrganization(supabase: SupabaseClient, organizationId: string): Promise<CheckRepliesResult> {
   const { data: sentActivities, error: sentError } = await supabase
     .from('sales_activities')
@@ -85,7 +87,7 @@ export async function checkRepliesForOrganization(supabase: SupabaseClient, orga
     if (!reply.hasReply) continue
 
     newReplies += 1
-    await supabase.rpc('record_sales_activity', {
+    const { data: activityId } = await supabase.rpc('record_sales_activity', {
       p_org_id: organizationId,
       p_activity_type: 'reply_received',
       p_agent_id: activity.agent_id,
@@ -95,6 +97,39 @@ export async function checkRepliesForOrganization(supabase: SupabaseClient, orga
       p_contact_company: activity.contact_company,
       p_metadata: { sent_message_id: messageId, thread_id: threadId, snippet: reply.replySnippet, replied_at: reply.repliedAt },
     })
+
+    // AI Sales Operator: classify the real reply text into a real
+    // category, and if it's an explicit meeting request, create the
+    // meeting immediately instead of waiting for a human to notice and
+    // log it. A classification failure (LLM not configured, bad
+    // response) just means no classification — it never blocks the
+    // reply itself from being recorded above.
+    if (activity.contact_email) {
+      const classified = await classifyReply(reply.replySnippet || '')
+      if (classified) {
+        await supabase.rpc('record_reply_classification', {
+          p_org_id: organizationId,
+          p_sales_activity_id: activityId || null,
+          p_contact_email: activity.contact_email,
+          p_contact_name: activity.contact_name,
+          p_classification: classified.classification,
+          p_confidence: classified.confidence,
+          p_reasoning: classified.reasoning,
+          p_action_items: classified.actionItems,
+        })
+
+        if (classified.classification === 'meeting_request') {
+          await supabase.rpc('create_meeting', {
+            p_org_id: organizationId,
+            p_contact_email: activity.contact_email,
+            p_contact_name: activity.contact_name,
+            p_contact_company: activity.contact_company,
+            p_task_id: activity.task_id,
+            p_estimated_value: null,
+          })
+        }
+      }
+    }
 
     if (crmProvider && activity.contact_email) {
       try {
