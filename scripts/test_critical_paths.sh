@@ -27,6 +27,7 @@ export PGUSER="${PGUSER:-postgres}"
 OWNER_ID="11111111-1111-1111-1111-111111111111"
 OUTSIDER_ID="22222222-2222-2222-2222-222222222222"
 ADMIN_ID="33333333-3333-3333-3333-333333333333"
+MEMBER_ID="44444444-4444-4444-4444-444444444444"
 ORG_ID="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 MEETING_ID="bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 
@@ -82,7 +83,13 @@ expect_value() {
   local out rc=0
   out=$(run_sql "$1" "$2" "$3" "$4") || rc=$?
   echo "$out" >/tmp/critical_path_last_output.txt
-  [ "$rc" -eq 0 ] && [ "$out" = "$expected" ]
+  # Only the LAST statement's output is the actual assertion — earlier
+  # statements in a multi-statement body (e.g. a void side-effecting call
+  # like record_login()) still run and still print their own (often
+  # empty) output line, which must not be compared against $expected.
+  local last_line
+  last_line=$(echo "$out" | tail -n1)
+  [ "$rc" -eq 0 ] && [ "$last_line" = "$expected" ]
 }
 
 on_fail_show_output() {
@@ -185,6 +192,37 @@ check "org owner (as manager) can see their own org's audit_log" \
 check "platform admin can see any org's audit_log" \
   expect_value authenticated "$ADMIN_ID" authenticated \
   "select count(*) > 0 from public.audit_log where organization_id = '$ORG_ID';" "t"
+
+# --- Phase 22: login tracking, feedback triage, support RLS, partner funnel ---
+check "record_login() increments login_count on first call" \
+  expect_value authenticated "$OWNER_ID" authenticated \
+  "select public.record_login(); select login_count from public.profiles where id = '$OWNER_ID';" "1"
+check "record_login() does not double-count within the 30-minute window" \
+  expect_value authenticated "$OWNER_ID" authenticated \
+  "select public.record_login(); select public.record_login(); select login_count from public.profiles where id = '$OWNER_ID';" "1"
+check "non-admin cannot call get_partner_funnel" \
+  expect_failure authenticated "$OWNER_ID" authenticated \
+  "select * from public.get_partner_funnel();" "not authorized"
+check "admin can call get_partner_funnel" \
+  expect_success authenticated "$ADMIN_ID" authenticated \
+  "select * from public.get_partner_funnel();"
+check "non-admin cannot triage_feedback" \
+  expect_failure authenticated "$OWNER_ID" authenticated "
+    insert into public.user_feedback (user_id, feedback_type, message) values ('$OWNER_ID', 'bug', 'critical path test bug');
+    select public.triage_feedback((select id from public.user_feedback where user_id = '$OWNER_ID' order by created_at desc limit 1), 'in_progress', 'high', null);
+  " "not authorized"
+check "admin can triage_feedback and bump_feedback_frequency" \
+  expect_value authenticated "$ADMIN_ID" authenticated "
+    select public.triage_feedback((select id from public.user_feedback where user_id = '$OWNER_ID' order by created_at desc limit 1), 'in_progress', 'high', '$ADMIN_ID');
+    select public.bump_feedback_frequency((select id from public.user_feedback where user_id = '$OWNER_ID' order by created_at desc limit 1));
+    select frequency from public.user_feedback where user_id = '$OWNER_ID' order by created_at desc limit 1;
+  " "2"
+check "org owner can see a support conversation filed by a different org member (widened RLS)" \
+  expect_value authenticated "$OWNER_ID" authenticated \
+  "select count(*) > 0 from public.support_conversations where organization_id = '$ORG_ID' and user_id = '$MEMBER_ID';" "t"
+check "true outsider still cannot see the org's support conversations" \
+  expect_value authenticated "$OUTSIDER_ID" authenticated \
+  "select count(*) from public.support_conversations where organization_id = '$ORG_ID';" "0"
 
 log ""
 log "----------------------------------------"

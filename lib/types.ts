@@ -6,6 +6,8 @@ export type Profile = {
   is_admin: boolean
   followers_count: number
   following_count: number
+  last_login_at: string | null
+  login_count: number
   created_at: string
   updated_at: string
 }
@@ -1113,7 +1115,7 @@ export type OrganizationTimelineEvent = {
   created_at: string
 }
 
-export type FeedbackType = 'bug' | 'feature_request' | 'general' | 'blocker'
+export type FeedbackType = 'bug' | 'feature_request' | 'general' | 'blocker' | 'success_story' | 'onboarding_friction'
 export type FeedbackStatus = 'open' | 'in_progress' | 'resolved' | 'closed'
 export type BlockerReason = 'confusing_workflow' | 'poor_leads' | 'no_replies' | 'integrations' | 'missing_features' | 'other'
 
@@ -1127,9 +1129,13 @@ export type UserFeedback = {
   status: FeedbackStatus
   admin_notes: string | null
   blocker_reason: BlockerReason | null
+  severity: FeedbackSeverity
+  frequency: number
+  owner_id: string | null
   created_at: string
   updated_at: string
   profiles?: Pick<Profile, 'id' | 'full_name'>
+  owner?: Pick<Profile, 'id' | 'full_name'> | null
 }
 
 export type MeetingStatus = 'requested' | 'scheduled' | 'completed' | 'cancelled'
@@ -1513,4 +1519,41 @@ export type AuditLogEntry = {
   metadata: Record<string, unknown>
   created_at: string
   profiles?: Pick<Profile, 'id' | 'full_name'>
+}
+
+// ============================================================
+// Phase 22 — Design Partner Launch
+// ============================================================
+export type FeedbackSeverity = 'low' | 'medium' | 'high' | 'critical'
+
+export type PartnerFunnel = {
+  signups: number
+  workspaces_created: number
+  gmail_connected: number
+  crm_connected: number
+  icp_submitted: number
+  campaigns_launched: number
+  logins: number
+  active_campaigns: number
+  replies_reviewed: number
+  approvals_completed: number
+  meetings_booked: number
+  opportunities_created: number
+  revenue_tracked: number
+}
+
+export type SuccessChecklistItem = {
+  key: string
+  label: string
+  done: boolean
+}
+
+export type PartnerWorkspaceData = {
+  checklist: SuccessChecklistItem[]
+  completedCount: number
+  totalCount: number
+  integrations: { provider: string; status: string }[]
+  campaignStatus: 'not_started' | 'active' | 'paused' | 'completed'
+  meetingsBooked: number
+  openSupportConversations: number
 }

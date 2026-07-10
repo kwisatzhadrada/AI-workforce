@@ -6,6 +6,7 @@ import { useState } from 'react'
 // The tabs a customer actually cares about — "I launched a campaign and
 // got meetings," not "I deployed an autonomous workforce architecture."
 const PRIMARY_TABS = [
+  { value: 'workspace', label: 'Workspace' },
   { value: 'executive', label: 'Executive' },
   { value: 'dashboard', label: 'Dashboard' },
   { value: 'campaign', label: 'Campaign' },

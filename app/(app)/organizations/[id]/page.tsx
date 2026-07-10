@@ -37,10 +37,12 @@ import { getExecutiveCommandCenterData } from '@/lib/executiveCommandCenter'
 import { getOrganizationExecutive } from '@/lib/executive'
 import { getExperiments } from '@/lib/experiments'
 import { getNextBestAction, getReplyClassifications } from '@/lib/replyIntelligence'
+import PartnerWorkspacePanel from '@/components/organizations/PartnerWorkspacePanel'
+import { getPartnerWorkspaceData } from '@/lib/partnerWorkspace'
 
 export const dynamic = 'force-dynamic'
 
-const VALID_TABS = ['executive', 'dashboard', 'overview', 'departments', 'agents', 'performance', 'tasks', 'workflows', 'activity', 'integrations', 'setup', 'campaign', 'reports'] as const
+const VALID_TABS = ['workspace', 'executive', 'dashboard', 'overview', 'departments', 'agents', 'performance', 'tasks', 'workflows', 'activity', 'integrations', 'setup', 'campaign', 'reports'] as const
 type Tab = (typeof VALID_TABS)[number]
 
 export default async function OrganizationPage({
@@ -52,7 +54,7 @@ export default async function OrganizationPage({
   const { id } = await params
   const sp = await searchParams
   const tabParam = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab
-  const tab: Tab = (VALID_TABS as readonly string[]).includes(tabParam || '') ? (tabParam as Tab) : 'executive'
+  const tab: Tab = (VALID_TABS as readonly string[]).includes(tabParam || '') ? (tabParam as Tab) : 'workspace'
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -100,6 +102,7 @@ export default async function OrganizationPage({
 
       <OrgTabs orgId={id} active={tab} />
 
+      {tab === 'workspace' && <WorkspaceTab organizationId={id} />}
       {tab === 'executive' && <ExecutiveTab organizationId={id} isManager={!!isManager} />}
       {tab === 'dashboard' && <DashboardTab organizationId={id} />}
       {tab === 'overview' && <OverviewTab organizationId={id} metrics={metrics} />}
@@ -362,6 +365,12 @@ async function ActivityTab({ organizationId }: { organizationId: string }) {
       </div>
     </div>
   )
+}
+
+async function WorkspaceTab({ organizationId }: { organizationId: string }) {
+  const supabase = await createClient()
+  const data = await getPartnerWorkspaceData(supabase, organizationId)
+  return <PartnerWorkspacePanel organizationId={organizationId} data={data} />
 }
 
 async function ExecutiveTab({ organizationId, isManager }: { organizationId: string; isManager: boolean }) {

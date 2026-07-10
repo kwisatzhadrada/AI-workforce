@@ -1,5 +1,7 @@
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { HealthStatus } from '@/lib/types'
 import { getAnalyticsByOrganization } from '@/lib/analytics'
 import { getDesignPartnerCohort, getDesignPartners } from '@/lib/designPartners'
 import { getAllFeedback } from '@/lib/feedback'
@@ -13,7 +15,19 @@ import RevenueMetricsPanel from '@/components/admin/RevenueMetricsPanel'
 
 export const dynamic = 'force-dynamic'
 
-export default async function DesignPartnersPage() {
+const HEALTH_FILTERS: { value: HealthStatus; label: string }[] = [
+  { value: 'healthy', label: 'Healthy' },
+  { value: 'at_risk', label: 'At Risk' },
+  { value: 'critical', label: 'Critical' },
+]
+
+export default async function DesignPartnersPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const sp = await searchParams
+  const healthFilter = typeof sp.health === 'string' ? sp.health : ''
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -95,6 +109,8 @@ export default async function DesignPartnersPage() {
     }
   })
 
+  const filteredRows = healthFilter ? rows.filter((r) => r.healthStatus === healthFilter) : rows
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
@@ -108,14 +124,26 @@ export default async function DesignPartnersPage() {
       <DesignPartnerCohortPanel rows={cohort} />
 
       <div>
-        <h2 className="font-['Space_Grotesk'] font-bold text-lg mb-3">All Organizations</h2>
-        {rows.length === 0 ? (
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <h2 className="font-['Space_Grotesk'] font-bold text-lg">All Organizations</h2>
+          <div className="flex flex-wrap gap-1.5">
+            <Link href="/admin/design-partners" className={`text-xs px-2.5 py-1 rounded-lg border ${!healthFilter ? 'bg-[#6D28D9] border-[#6D28D9] text-white' : 'bg-[#121428] border-[#3C3A58] text-[#8A88A8]'}`}>
+              All health
+            </Link>
+            {HEALTH_FILTERS.map((h) => (
+              <Link key={h.value} href={`/admin/design-partners?health=${healthFilter === h.value ? '' : h.value}`} className={`text-xs px-2.5 py-1 rounded-lg border ${healthFilter === h.value ? 'bg-[#6D28D9] border-[#6D28D9] text-white' : 'bg-[#121428] border-[#3C3A58] text-[#8A88A8]'}`}>
+                {h.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+        {filteredRows.length === 0 ? (
           <div className="text-center text-[#8A88A8] py-10 bg-[#0C0D22] border border-[#3C3A58]/30 rounded-xl">
-            No organizations yet.
+            {rows.length === 0 ? 'No organizations yet.' : 'No organizations match this health filter.'}
           </div>
         ) : (
           <div className="space-y-3">
-            {rows.map((r) => (
+            {filteredRows.map((r) => (
               <DesignPartnerRow key={r.organizationId} data={r} />
             ))}
           </div>

@@ -14,6 +14,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
   if (!profile) redirect('/login')
 
+  // Real login tracking for the Engagement funnel — guarded server-side
+  // (see migration 022's 30-minute window) so repeated layout renders in
+  // one sitting don't inflate the count.
+  await supabase.rpc('record_login')
+
   return (
     <div className="min-h-screen bg-[#08081C]">
       <Nav profile={profile as Profile} />

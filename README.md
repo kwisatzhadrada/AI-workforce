@@ -770,6 +770,91 @@ path.
   `on conflict do update`; and a `numeric(14,2)` revenue comparison needed
   `7500.00`, not `7500`, since Postgres preserves the declared scale.
 
+## Phase 22 — Design Partner Launch
+
+The mission: stop building platform infrastructure and get the first real
+companies using the system, with evidence to show for it. Every addition
+below directly supports onboarding, activating, supporting, or learning
+from design partners — no new AI systems, workforce templates,
+marketplaces, or social features.
+
+- 🚪 **Partner Workspace** — a genuinely new, single-page "Workspace" tab
+  (now the org page's default landing tab, `PartnerWorkspacePanel.tsx` +
+  `lib/partnerWorkspace.ts`) answering exactly what a design partner needs
+  day-to-day: a 7-item Success Checklist (Connect Gmail, Connect CRM,
+  Define ICP, Launch Campaign, First Reply, First Meeting, First
+  Opportunity), integration status, campaign status, meetings booked, and
+  support status — composed entirely from data that already existed, with
+  zero agent/workflow/task terminology anywhere on the page.
+- 📋 **Feedback triage: severity, frequency, owner, two new categories** —
+  `user_feedback` gained `severity` (low/medium/high/critical),
+  `frequency` (a real, human-driven "this came up again" counter, not
+  automated duplicate detection — see migration 022's own comment on why),
+  and `owner_id`, plus two new categories the mission named explicitly:
+  `success_story` and `onboarding_friction`. New `triage_feedback()` and
+  `bump_feedback_frequency()` RPCs (admin-only) back a rebuilt
+  `/admin/feedback` dashboard with type/status/severity filters and an
+  owner-assignment dropdown (`FeedbackTriageControl.tsx`, replacing the
+  old status-only control).
+- 📊 **Design Partner Funnel: Activation → Engagement → Value** — the
+  exact three-tier structure this phase's mission named, via a new
+  `get_partner_funnel()` RPC and `PartnerFunnelPanel.tsx`. Two genuinely
+  new signals back it: real login tracking (`profiles.login_count` /
+  `last_login_at`, incremented by a new `record_login()` call in the app
+  layout, guarded to once per 30-minute window so repeated page renders
+  in one sitting don't inflate the count) and "replies reviewed" (real
+  `reply_classifications` rows from Phase 21). Every other stage reuses
+  signals that already existed — this is additive to, not a replacement
+  for, the three funnels already on `/analytics` from earlier phases,
+  since each answers a genuinely different question.
+- 🩺 **Customer health now factors in login frequency and support
+  tickets** — `get_organization_health()` (Phase 19) is redefined with two
+  real, mission-named inputs it never had: whether any real org member
+  logged in in the last 14 days, and how many support conversations are
+  currently open. Both matter more now than before Phase 21, since the
+  cron worker can make `organization_activity`/`sales_activities` look
+  "recently active" purely from autonomous execution — login frequency is
+  the one signal that specifically answers "is a human still engaged."
+  Design Partner Ops Center (`/admin/design-partners`) gained a
+  Healthy/At Risk/Critical filter.
+- 🔍 **Support visibility widened to real org membership** — previously
+  `support_conversations` was only visible to the literal submitter or an
+  admin, meaning a manager couldn't see a teammate's ticket. Widened to
+  `is_org_member()`, the same convention every other org-scoped table
+  uses — required for the Partner Workspace's "support status" to mean
+  anything for anyone but the exact person who filed the ticket.
+- 🏛️ **Founder Dashboard: `/analytics` extended, not replaced** — rather
+  than a new admin page, the existing analytics dashboard now answers all
+  four sections the mission asked for: Growth (already covered by
+  `PlatformOverviewPanel` + the new funnel's `opportunities_created`),
+  Customer Success (`FounderCustomerSuccessPanel.tsx` — health
+  distribution across tracked partners, onboarding completion rate,
+  open support volume), Revenue (`RevenueMetricsPanel`, reused directly
+  from the Design Partner Ops Center), and Product
+  (`FounderProductPanel.tsx` — top feedback/bugs/feature requests ranked
+  by real `frequency`, never a fabricated "trending" score).
+- 🛡️ **`PRODUCTION_READINESS_AUDIT.md`** — a complete pass over every item
+  this phase's mission named (env vars, OAuth flows, Gmail/HubSpot/Hunter
+  integrations, cron jobs, worker execution, RLS policies, backup
+  strategy, monitoring), verified against the actual code rather than
+  assumed. Found and documented two real, previously-undocumented gaps
+  (no alerting/monitoring push, no backup strategy) and one real-but-not-
+  exploitable-today gap (the Gmail OAuth `state` parameter is a routing
+  hint, not a signed CSRF nonce — the RPC's own `is_org_manager()` check
+  is the actual authorization boundary regardless).
+- 🧪 **Verified against a genuinely fresh local Postgres 16 instance** (22
+  migrations total, no errors) — `scripts/test_critical_paths.sh` extended
+  with 8 new Phase 22 checks (login tracking's 30-minute guard,
+  `get_partner_funnel()`/`triage_feedback()`/`bump_feedback_frequency()`
+  admin-only enforcement, and the widened support RLS proven in both
+  directions with a real non-owner org member fixture) — **27/27 checks
+  pass**. One real bug in the test script itself (not the app) was caught
+  and fixed while adding these: `expect_value()` compared a multi-
+  statement SQL body's entire output against the expected value, but a
+  void-returning side-effecting call like `record_login()` still prints
+  its own (empty) output line before the real assertion's line — fixed by
+  comparing only the last output line, not the whole capture.
+
 ## Getting started
 
 ### 1. Install dependencies

@@ -1,5 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js'
-import { AnalyticsByOrganization, AnalyticsFunnel, OnboardingFunnel, PlatformOverview, ProductAnalyticsFunnel } from './types'
+import { AnalyticsByOrganization, AnalyticsFunnel, OnboardingFunnel, PartnerFunnel, PlatformOverview, ProductAnalyticsFunnel } from './types'
 
 export async function getAnalyticsFunnel(supabase: SupabaseClient): Promise<AnalyticsFunnel | null> {
   const { data, error } = await supabase.rpc('get_analytics_funnel').single()
@@ -33,4 +33,13 @@ export async function getProductAnalyticsFunnel(supabase: SupabaseClient): Promi
   const { data, error } = await supabase.rpc('get_product_analytics_funnel').single()
   if (error || !data) return null
   return data as ProductAnalyticsFunnel
+}
+
+// Phase 22's exact Activation / Engagement / Value structure — a
+// separate function from the three funnels above rather than a
+// replacement, since each answers a genuinely different question.
+export async function getPartnerFunnel(supabase: SupabaseClient): Promise<PartnerFunnel | null> {
+  const { data, error } = await supabase.rpc('get_partner_funnel').single()
+  if (error || !data) return null
+  return data as PartnerFunnel
 }

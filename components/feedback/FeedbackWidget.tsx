@@ -10,6 +10,8 @@ const TYPES: { value: FeedbackType; label: string }[] = [
   { value: 'blocker', label: '🚧 What\'s stopping me' },
   { value: 'bug', label: '🐛 Bug' },
   { value: 'feature_request', label: '💡 Feature request' },
+  { value: 'onboarding_friction', label: '🧭 Onboarding friction' },
+  { value: 'success_story', label: '🎉 Success story' },
   { value: 'general', label: '💬 General feedback' },
 ]
 
@@ -115,7 +117,9 @@ export default function FeedbackWidget({ userId, organizationId }: { userId: str
             placeholder={
               type === 'blocker' ? 'Tell us more (optional)' :
               type === 'bug' ? "What happened? What did you expect instead?" :
-              type === 'feature_request' ? "What would help you?" : "Anything on your mind?"
+              type === 'feature_request' ? "What would help you?" :
+              type === 'onboarding_friction' ? "Where did getting started feel confusing or slow?" :
+              type === 'success_story' ? "What worked well? What result did you get?" : "Anything on your mind?"
             }
             className="w-full bg-[#121428] border border-[#3C3A58] text-[#EDEAF8] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#6D28D9]"
           />
