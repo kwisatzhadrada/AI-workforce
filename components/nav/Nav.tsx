@@ -28,6 +28,7 @@ const ADMIN_ITEMS = [
   { href: '/admin/support', label: 'Support Tools' },
   { href: '/admin/support/conversations', label: 'Conversations' },
   { href: '/admin/design-partners', label: 'Design Partners' },
+  { href: '/admin/applications', label: 'Applications' },
 ]
 
 export default function Nav({ profile }: { profile: Profile }) {

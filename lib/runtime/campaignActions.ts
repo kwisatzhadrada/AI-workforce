@@ -6,6 +6,7 @@ import { SentEmailRecord } from './salesActions'
 export type SendApprovedOutreachResult = {
   sent: SentEmailRecord[]
   failed: { email: string; error: string }[]
+  skippedDuplicates: string[]
 }
 
 // The only path in this codebase that actually calls Gmail's send API for
@@ -41,6 +42,34 @@ export async function sendApprovedOutreach(
     return { result: null, error: 'This outreach has already been sent' }
   }
 
+  // Duplicate-send prevention: never contact the same real email address
+  // twice across two different campaign runs — a single task's own
+  // drafts are already deduplicated by the `output.sent` check above,
+  // this catches the same contact resurfacing in a later research pass.
+  const { data: alreadyContactedRows } = await supabase.rpc('get_already_contacted', {
+    p_org_id: params.organizationId,
+    p_emails: drafts.map((d) => d.email),
+  })
+  const alreadyContacted = new Set(((alreadyContactedRows as { contact_email: string }[]) || []).map((r) => r.contact_email))
+  const toSend = drafts.filter((d) => !alreadyContacted.has(d.email))
+  const skippedDuplicates = drafts.filter((d) => alreadyContacted.has(d.email)).map((d) => d.email)
+
+  if (toSend.length === 0) {
+    return { result: { sent: [], failed: [], skippedDuplicates }, error: skippedDuplicates.length > 0 ? 'Every contact on this task has already been emailed by this organization before' : null }
+  }
+
+  // Safety controls: a design partner's own free trial status and daily
+  // send cap are both real, enforced gates — not just a UI suggestion —
+  // checked once for the whole batch right before any Gmail API call.
+  const { data: eligibility } = await supabase.rpc('check_send_eligibility', { p_org_id: params.organizationId, p_count: toSend.length }).single()
+  if (eligibility && !(eligibility as { allowed: boolean }).allowed) {
+    const reason = (eligibility as { reason: string }).reason
+    const message = reason === 'daily_cap_exceeded'
+      ? `Sending these ${toSend.length} email(s) would exceed this organization's daily send cap — wait until tomorrow or raise the cap in Campaign settings.`
+      : 'This organization\'s trial has ended and there is no active subscription — subscribe on the Billing tab to keep sending.'
+    return { result: null, error: message }
+  }
+
   let emailProvider
   try {
     emailProvider = await getEmailProvider(supabase, params.organizationId)
@@ -51,7 +80,7 @@ export async function sendApprovedOutreach(
   const sent: SentEmailRecord[] = []
   const failed: { email: string; error: string }[] = []
 
-  for (const draft of drafts) {
+  for (const draft of toSend) {
     try {
       const result = await emailProvider.sendEmail({ to: draft.email, subject: draft.subject, body: draft.body })
       const record: SentEmailRecord = { email: draft.email, name: draft.name, messageId: result.messageId, threadId: result.threadId, sentAt: new Date().toISOString() }
@@ -72,10 +101,18 @@ export async function sendApprovedOutreach(
     }
   }
 
+  await supabase.rpc('log_audit_event', {
+    p_org_id: params.organizationId,
+    p_action: 'outreach_sent',
+    p_target_type: 'tasks',
+    p_target_id: params.taskId,
+    p_metadata: { sent: sent.length, failed: failed.length, skipped_duplicates: skippedDuplicates.length },
+  })
+
   await supabase
     .from('tasks')
-    .update({ output: { ...output, sent, send_failed: failed, emails_sent: sent.length } })
+    .update({ output: { ...output, sent, send_failed: failed, skipped_duplicates: skippedDuplicates, emails_sent: sent.length } })
     .eq('id', params.taskId)
 
-  return { result: { sent, failed }, error: null }
+  return { result: { sent, failed, skippedDuplicates }, error: null }
 }

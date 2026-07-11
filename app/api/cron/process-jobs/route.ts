@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { runJobHandler } from '@/lib/runtime/jobHandlers'
+import { sendAlert } from '@/lib/alerting'
 import { Job, JobType } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -72,6 +73,10 @@ async function processClaimedJobs(supabase: ReturnType<typeof createServiceClien
       const message = err instanceof Error ? err.message : 'Job failed'
       await supabase.rpc('fail_job_system', { p_job_id: job.id, p_run_id: runId, p_error: message })
       results.push({ jobId: job.id, status: 'failed' })
+      // Real alerting (Phase 24) — a no-op unless ALERT_WEBHOOK_URL is
+      // configured, but genuinely fires when it is, rather than only
+      // ever surfacing in the pull-based Error Center.
+      await sendAlert('job_failed', { jobId: job.id, jobType: job.job_type, organizationId: job.organization_id, error: message })
     }
   }
 

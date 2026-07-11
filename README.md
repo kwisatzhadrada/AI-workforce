@@ -938,6 +938,84 @@ real friction, not new features.
   test_critical_paths.sh` re-run clean, 27/27 checks passing, alongside
   the from-scratch campaign lifecycle simulation above.
 
+## Phase 24 — Revenue & Customer Acquisition Sprint
+
+The mission: stop building platform capabilities and get the first 5
+design partners and first paying customers — the single unconditional
+blocker Phase 23 identified was "there is no way to charge anyone." This
+phase built that, plus everything else standing between here and a real
+launch.
+
+- 💳 **Real Stripe billing** — a genuine `organization_subscriptions`
+  table, a real 14-day trial that starts automatically the moment an
+  organization is created (no card required), and a complete
+  `app/api/billing/*` surface: Checkout Sessions for Standard/Growth
+  plans, a real Customer Portal, upgrade/downgrade with Stripe's own
+  proration, cancel-at-period-end with resume, and full webhook handling
+  (`checkout.session.completed`, subscription created/updated/deleted,
+  `invoice.payment_failed`) via `upsert_subscription_from_stripe_system()`
+  — the one place a Stripe event becomes a real row in our schema.
+  Verified against a real Postgres database this phase (trial
+  auto-start, billing status computation, all RLS/RPC boundaries); never
+  executed against Stripe's real API, since this sandbox has no Stripe
+  account — see `CAMPAIGN_VALIDATION_REPORT.md`'s established pattern for
+  the same honest caveat applied to Gmail/Hunter/LLM calls before it.
+- 🛡️ **Safety controls, actually enforced** — a real daily send cap
+  (`organizations.daily_send_cap`, default 50) and duplicate-contact
+  prevention (`get_already_contacted()`) are both checked inside
+  `sendApprovedOutreach()` itself, before any Gmail API call — not just
+  suggested in the UI. A visible `SendSafetyPanel` shows today's send
+  count against the cap with a warning as it's approached, and every
+  send now writes a real `audit_log` entry.
+- 🔒 **A real, pre-existing security gap found and fixed**: wiring send
+  auditing directly into application code surfaced that `log_audit_event()`
+  (Phase 21) had no authorization check at all — any authenticated user
+  could already call it directly to insert a fabricated audit log entry
+  for any organization, undermining the audit log's integrity. Fixed in
+  migration 023 with a real `is_org_member()/is_admin()/is_system_caller()`
+  check, verified in both directions by the regression script.
+- 🏠 **A real marketing landing page** — `/` no longer redirects
+  logged-out visitors straight to the login form; `LandingPage.tsx`
+  answers what this is, who it's for, how it works, and why to trust it,
+  centered on one outcome ("book more sales meetings with an AI sales
+  workforce"), with no "AI workforce network"/"autonomous
+  organizations"/"digital workers"/"executive AI" language anywhere on it.
+- 📝 **Design partner applications** — `/apply` (the one legitimate
+  `anon`-reachable write in this schema — a prospective partner applies
+  before they have an account) plus `/admin/applications` to review,
+  approve, or reject.
+- 📊 **Founder metrics extended** — `FounderKeyMetricsPanel` now shows
+  the exact set this phase named: signups, activated accounts (a real,
+  distinct milestone — submitted an ICP — not a duplicate of signups or
+  campaigns launched), connected Gmail, campaigns launched, emails sent,
+  replies received, meetings booked, and both a signup→activation rate
+  and a reply/meeting conversion rate.
+- 🚨 **Real error tracking and alerting** — Sentry (`@sentry/nextjs`)
+  wired through `instrumentation.ts`/`instrumentation-client.ts`/
+  `sentry.*.config.ts`, safely inert without a `NEXT_PUBLIC_SENTRY_DSN`.
+  A new `lib/alerting.ts` posts a real webhook alert on every job failure
+  and billing webhook error — genuinely fires when `ALERT_WEBHOOK_URL` is
+  set, turning the previously pull-only Error Center into something that
+  can also push. A real `/api/health` endpoint checks database
+  connectivity for external uptime monitors.
+- ⚖️ **Launch documents**: `TERMS_OF_SERVICE.md`, `PRIVACY_POLICY.md`,
+  `SECURITY_OVERVIEW.md` (each explicitly marked as a working draft
+  needing real legal review, not final), all with matching in-app pages
+  (`/terms`, `/privacy`, `/security`) linked from signup;
+  `CUSTOMER_ONBOARDING_GUIDE.md`; `INTERNAL_LAUNCH_CHECKLIST.md`; and
+  `FINAL_DELIVERABLE.md`, which supersedes Phase 23's `LAUNCH_VERDICT.md`
+  now that its one blocker is built — answering directly: can someone
+  pay (yes, mechanically, untested against a real Stripe account), onboard
+  themselves (yes), launch a campaign (yes), get results (yes at the data
+  layer, unverifiable end-to-end without real external credentials), and
+  be supported (yes, untested under real volume).
+- 🧪 **Verified against a genuinely fresh local Postgres 16 instance** (23
+  migrations, no errors) — `scripts/test_critical_paths.sh` extended with
+  12 new Phase 24 checks (trial auto-start, billing status RLS, send
+  eligibility both allowing and rejecting, the `log_audit_event` security
+  fix proven in both directions, and the full design partner application
+  submit/review flow) — **39/39 checks pass**.
+
 ## Getting started
 
 ### 1. Install dependencies

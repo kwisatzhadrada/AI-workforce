@@ -1542,6 +1542,49 @@ export type PartnerFunnel = {
   revenue_tracked: number
 }
 
+// ============================================================
+// Phase 24 — Revenue & Customer Acquisition Sprint
+// ============================================================
+export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'unpaid'
+export type SubscriptionPlan = 'standard' | 'growth'
+
+export type OrganizationBillingStatus = {
+  status: SubscriptionStatus
+  plan: SubscriptionPlan | null
+  trial_end: string | null
+  current_period_end: string | null
+  cancel_at_period_end: boolean
+  admin_comped: boolean
+  is_active: boolean
+  days_left_in_trial: number
+}
+
+export type SendEligibility = {
+  allowed: boolean
+  reason: 'subscription_inactive' | 'daily_cap_exceeded' | null
+  sent_today: number
+  daily_cap: number
+}
+
+export type DesignPartnerApplicationStatus = 'pending' | 'approved' | 'rejected'
+
+export type DesignPartnerApplication = {
+  id: string
+  company_name: string
+  industry: string
+  team_size: string
+  current_sales_process: string
+  goals: string
+  contact_name: string
+  contact_email: string
+  contact_role: string | null
+  status: DesignPartnerApplicationStatus
+  reviewed_by: string | null
+  reviewed_at: string | null
+  review_notes: string | null
+  created_at: string
+}
+
 export type SuccessChecklistItem = {
   key: string
   label: string

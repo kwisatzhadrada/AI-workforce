@@ -16,11 +16,11 @@ Supabase and Vercel sections below.
       still had the placeholder URL, which is why the live campaign
       validation in `CAMPAIGN_VALIDATION_REPORT.md` could only go as far
       as the signup form.)
-- [ ] All migrations `001`–`022` applied **in numeric order**, checking
+- [ ] All migrations `001`–`023` applied **in numeric order**, checking
       `supabase/migrations/` for the current highest number first — the
       guide previously said "001 through 013" and would have silently
-      skipped every Phase 14–22 migration for a new deployer. Fixed this
-      sprint.
+      skipped every Phase 14–22 migration for a new deployer. Fixed in
+      Phase 23.
 - [ ] `service_role` key copied into `SUPABASE_SERVICE_ROLE_KEY` — required
       for the cron worker, not just "nice to have." Confirm it's the
       `service_role` key, not the `anon` key, by its length/prefix in the
@@ -53,6 +53,31 @@ Supabase and Vercel sections below.
       execution time
 - [ ] Redeployed after adding/changing any variable — Vercel does not
       hot-reload environment variables into a running deployment
+
+## Billing (Stripe) — new in Phase 24
+
+- [ ] Two recurring Prices created in the Stripe dashboard (Standard,
+      Growth) — their IDs go in `STRIPE_PRICE_ID_STANDARD`/
+      `STRIPE_PRICE_ID_GROWTH`.
+- [ ] A webhook endpoint created in the Stripe dashboard pointed at
+      `https://<your-domain>/api/billing/webhook`, subscribed to at
+      least: `checkout.session.completed`, `customer.subscription.created`,
+      `customer.subscription.updated`, `customer.subscription.deleted`,
+      `invoice.payment_failed`. Its signing secret goes in
+      `STRIPE_WEBHOOK_SECRET`.
+- [ ] `STRIPE_SECRET_KEY` set to a **live** mode key before real customers
+      pay — a test-mode key will silently only work with Stripe test cards.
+- [ ] Stripe Customer Portal configured (Stripe dashboard → Settings →
+      Billing → Customer portal) — at minimum enable "Customers can
+      switch plans" so plan changes initiated from the portal (as opposed
+      to this app's own Upgrade/Downgrade buttons) also work.
+- [ ] Test the full loop once in Stripe test mode before going live: sign
+      up, subscribe with a Stripe test card, confirm the organization's
+      Billing tab shows "Active," cancel, confirm it shows the
+      cancellation date.
+- [ ] Every new organization gets a real 14-day trial automatically (no
+      card required) — confirm `organization_subscriptions` has a row
+      with `status = 'trialing'` immediately after creating a test org.
 
 ## OAuth redirect URLs
 
@@ -107,17 +132,31 @@ Supabase and Vercel sections below.
       up two accounts, confirm neither can see the other's organization,
       integrations, or meetings.
 
-## Error monitoring & logging
+## Error monitoring & logging — real alerting added in Phase 24
 
-- [ ] Error Center (`/admin/support`) checked as part of a regular
-      operating routine — it is pull-based, not push-based (see
-      `PRODUCTION_READINESS_AUDIT.md` §9). No external alerting exists yet;
-      until it does, someone needs to actually open this page periodically.
+- [ ] `NEXT_PUBLIC_SENTRY_DSN` set to a real Sentry project's DSN — wires
+      up real error tracking on both server and client
+      (`instrumentation.ts`, `instrumentation-client.ts`,
+      `sentry.server.config.ts`, `sentry.edge.config.ts`). Left unset,
+      Sentry safely no-ops rather than breaking anything.
+- [ ] `ALERT_WEBHOOK_URL` set to a real webhook (a Slack incoming webhook
+      is the simplest) — the cron worker now POSTs a real alert on every
+      job failure, and the Stripe webhook handler posts one on any
+      billing webhook processing error (`lib/alerting.ts`). Left unset,
+      this safely no-ops.
+- [ ] `/api/health` returns `200` with `{"status":"ok"}` — point an
+      external uptime monitor (UptimeRobot, Better Stack, or Vercel's own
+      monitoring) at this URL; it checks real database connectivity, not
+      just that the process is running.
+- [ ] Error Center (`/admin/support`) still worth checking as part of a
+      regular routine even with alerting configured — it's the durable
+      record; the webhook alert is the "notice it right now" layer on top.
 - [ ] Vercel's own function logs (Vercel dashboard → your project →
-      Logs) are the only record of an API route or cron invocation
-      crashing outright (as opposed to completing and recording a
-      `job_failures` row) — bookmark this, it's the one place a fully
-      broken cron run would show up.
+      Logs) are still the record of an API route or cron invocation
+      crashing outright before it can even post an alert.
+- [ ] Database monitoring: use the Supabase dashboard's own
+      Database → Reports section (connection count, query performance,
+      disk usage) — this codebase doesn't duplicate that tooling.
 
 ## Backup strategy
 

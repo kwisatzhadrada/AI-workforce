@@ -36,7 +36,13 @@ export default function DraftsReview({
     if (!res.ok) { setError(body.error || 'Failed to send'); return }
     const sentCount = body.result?.sent?.length || 0
     const failedCount = body.result?.failed?.length || 0
-    setNotice(`Sent ${sentCount} email(s)${failedCount > 0 ? `, ${failedCount} failed` : ''}.`)
+    const skippedCount = body.result?.skippedDuplicates?.length || 0
+    setNotice(
+      `Sent ${sentCount} email(s)` +
+      (failedCount > 0 ? `, ${failedCount} failed` : '') +
+      (skippedCount > 0 ? `, ${skippedCount} skipped (already contacted before)` : '') +
+      '.'
+    )
     router.refresh()
   }
 

@@ -12,6 +12,7 @@ const PRIMARY_TABS = [
   { value: 'campaign', label: 'Campaign' },
   { value: 'reports', label: 'Reports' },
   { value: 'integrations', label: 'Integrations' },
+  { value: 'billing', label: 'Billing' },
 ] as const
 
 // Real, still fully functional — just not competing for attention on

@@ -224,6 +224,49 @@ check "true outsider still cannot see the org's support conversations" \
   expect_value authenticated "$OUTSIDER_ID" authenticated \
   "select count(*) from public.support_conversations where organization_id = '$ORG_ID';" "0"
 
+# --- Phase 24: billing, safety controls, design partner applications ---
+check "a brand-new organization gets a real trial automatically" \
+  expect_value authenticated "$OWNER_ID" authenticated \
+  "select status from public.organization_subscriptions where organization_id = '$ORG_ID';" "trialing"
+check "get_organization_billing_status reports an active trial" \
+  expect_value authenticated "$OWNER_ID" authenticated \
+  "select is_active from public.get_organization_billing_status('$ORG_ID');" "t"
+check "outsider cannot read the org's billing status" \
+  expect_failure authenticated "$OUTSIDER_ID" authenticated \
+  "select * from public.get_organization_billing_status('$ORG_ID');" "not authorized"
+check "check_send_eligibility allows a small batch under the default cap" \
+  expect_value authenticated "$OWNER_ID" authenticated \
+  "select allowed from public.check_send_eligibility('$ORG_ID', 5);" "t"
+check "check_send_eligibility rejects a batch over the daily cap" \
+  expect_value authenticated "$OWNER_ID" authenticated \
+  "select reason from public.check_send_eligibility('$ORG_ID', 1000);" "daily_cap_exceeded"
+check "authenticated role is denied upsert_subscription_from_stripe_system at the Postgres level" \
+  expect_failure authenticated "$OWNER_ID" authenticated \
+  "select * from public.upsert_subscription_from_stripe_system('$ORG_ID', 'cus_fake');" "permission denied"
+check "service_role can upsert a subscription from a simulated Stripe webhook" \
+  expect_value service_role "" service_role "
+    select public.upsert_subscription_from_stripe_system('$ORG_ID', 'cus_test123', 'sub_test123', 'standard', 'active', null, now() + interval '30 days', false);
+    select status from public.organization_subscriptions where organization_id = '$ORG_ID';
+  " "active"
+check "outsider cannot directly call log_audit_event for someone else's org (security fix verified)" \
+  expect_failure authenticated "$OUTSIDER_ID" authenticated \
+  "select public.log_audit_event('$ORG_ID', 'fake_event');" "not authorized"
+check "org member can still log a real audit event for their own org" \
+  expect_success authenticated "$OWNER_ID" authenticated \
+  "select public.log_audit_event('$ORG_ID', 'test_event');"
+check "logged-out visitor (anon) can submit a design partner application" \
+  expect_success anon "" anon "
+    select * from public.submit_design_partner_application(
+      'Critical Path Co', 'SaaS', '2-5', 'Manual outbound', 'Book more meetings', 'Test Applicant', 'applicant@example.com', 'Founder'
+    );
+  "
+check "non-admin cannot review a design partner application" \
+  expect_failure authenticated "$OWNER_ID" authenticated \
+  "select public.review_design_partner_application((select id from public.design_partner_applications order by created_at desc limit 1), 'approved');" "not authorized"
+check "admin can approve a design partner application" \
+  expect_value authenticated "$ADMIN_ID" authenticated \
+  "select status from public.review_design_partner_application((select id from public.design_partner_applications order by created_at desc limit 1), 'approved', 'Looks good');" "approved"
+
 log ""
 log "----------------------------------------"
 log "$PASSED / $TOTAL checks passed"

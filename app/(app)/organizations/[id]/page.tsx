@@ -39,10 +39,13 @@ import { getExperiments } from '@/lib/experiments'
 import { getNextBestAction, getReplyClassifications } from '@/lib/replyIntelligence'
 import PartnerWorkspacePanel from '@/components/organizations/PartnerWorkspacePanel'
 import { getPartnerWorkspaceData } from '@/lib/partnerWorkspace'
+import BillingPanel from '@/components/billing/BillingPanel'
+import { getOrganizationBillingStatus, checkSendEligibility } from '@/lib/billing'
+import SendSafetyPanel from '@/components/campaigns/SendSafetyPanel'
 
 export const dynamic = 'force-dynamic'
 
-const VALID_TABS = ['workspace', 'executive', 'dashboard', 'overview', 'departments', 'agents', 'performance', 'tasks', 'workflows', 'activity', 'integrations', 'setup', 'campaign', 'reports'] as const
+const VALID_TABS = ['workspace', 'executive', 'dashboard', 'overview', 'departments', 'agents', 'performance', 'tasks', 'workflows', 'activity', 'integrations', 'setup', 'campaign', 'reports', 'billing'] as const
 type Tab = (typeof VALID_TABS)[number]
 
 export default async function OrganizationPage({
@@ -116,6 +119,7 @@ export default async function OrganizationPage({
       {tab === 'setup' && <SetupWizardTab organizationId={id} />}
       {tab === 'campaign' && <CampaignTab organizationId={id} isManager={!!isManager} />}
       {tab === 'reports' && <ReportsTab organizationId={id} organizationName={org.name} />}
+      {tab === 'billing' && <BillingTab organizationId={id} />}
     </div>
   )
 }
@@ -391,6 +395,12 @@ async function ReportsTab({ organizationId, organizationName }: { organizationId
   return <ReportsPanel organizationId={organizationId} organizationName={organizationName} reports={reports} />
 }
 
+async function BillingTab({ organizationId }: { organizationId: string }) {
+  const supabase = await createClient()
+  const status = await getOrganizationBillingStatus(supabase, organizationId)
+  return <BillingPanel organizationId={organizationId} status={status} />
+}
+
 async function IntegrationsTab({ organizationId, isManager, error }: { organizationId: string; isManager: boolean; error?: string }) {
   const supabase = await createClient()
   const integrations = await getOrganizationIntegrations(supabase, organizationId)
@@ -407,7 +417,7 @@ async function SetupWizardTab({ organizationId }: { organizationId: string }) {
 
 async function CampaignTab({ organizationId, isManager }: { organizationId: string; isManager: boolean }) {
   const supabase = await createClient()
-  const [state, integrations, meetings, meetingFunnel, activity, executive, experiments, nextBestActions, replyClassifications] = await Promise.all([
+  const [state, integrations, meetings, meetingFunnel, activity, executive, experiments, nextBestActions, replyClassifications, sendEligibility] = await Promise.all([
     getCampaignState(supabase, organizationId),
     getOrganizationIntegrations(supabase, organizationId),
     getMeetings(supabase, organizationId),
@@ -417,6 +427,7 @@ async function CampaignTab({ organizationId, isManager }: { organizationId: stri
     getExperiments(supabase, organizationId),
     getNextBestAction(supabase, organizationId),
     getReplyClassifications(supabase, organizationId, 20),
+    checkSendEligibility(supabase, organizationId, 0),
   ])
 
   // A goal can exist with no usable campaign behind it yet — e.g. launch
@@ -431,6 +442,7 @@ async function CampaignTab({ organizationId, isManager }: { organizationId: stri
 
   return (
     <div className="space-y-6">
+      <SendSafetyPanel organizationId={organizationId} eligibility={sendEligibility} isManager={isManager} />
       <CampaignDashboard
         organizationId={organizationId}
         state={state}
