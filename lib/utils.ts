@@ -325,3 +325,15 @@ export function extractDomains(text: string): string[] {
   const normalized = matches.map((m) => m.toLowerCase().replace(/^www\./, ''))
   return Array.from(new Set(normalized))
 }
+
+// supabase-js throws a raw "Failed to fetch" for any network-level
+// failure (DNS, offline, a misconfigured project URL) — accurate but
+// meaningless to a real user. Everything else (wrong password, unknown
+// email) already comes back as a clear message from Supabase itself, so
+// this only needs to catch the one generic case.
+export function friendlyAuthError(message: string): string {
+  if (/failed to fetch/i.test(message) || /network/i.test(message)) {
+    return "Couldn't reach the server. Check your connection and try again — if this keeps happening, the app may be misconfigured."
+  }
+  return message
+}

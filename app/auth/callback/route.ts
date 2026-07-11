@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getPostAuthDestination } from '@/lib/onboarding'
 
-function safeNext(raw: string | null): string {
-  if (!raw) return '/agents'
-  if (!raw.startsWith('/') || raw.startsWith('//')) return '/agents'
+function safeNext(raw: string | null): string | null {
+  if (!raw) return null
+  if (!raw.startsWith('/') || raw.startsWith('//')) return null
   return raw
 }
 
@@ -14,9 +15,10 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient()
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`)
+      const destination = next || (data.user ? await getPostAuthDestination(supabase, data.user.id) : '/agents')
+      return NextResponse.redirect(`${origin}${destination}`)
     }
   }
 

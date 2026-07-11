@@ -23,8 +23,8 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  title: 'AI Workforce – Agent Identity Layer',
-  description: 'Give every AI worker a verifiable identity: skills, credentials, reputation, wallet, and performance history.',
+  title: 'AI Workforce – An AI Sales Team That Books Meetings',
+  description: 'Deploy an AI sales team that finds prospects, writes outreach, sends real email, and books real meetings — connected to your Gmail and CRM in minutes.',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

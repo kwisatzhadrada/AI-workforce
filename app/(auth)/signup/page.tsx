@@ -7,6 +7,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { siteUrl } from '@/lib/siteUrl'
+import { getPostAuthDestination } from '@/lib/onboarding'
+import { friendlyAuthError } from '@/lib/utils'
 
 export default function SignupPage() {
   const router = useRouter()
@@ -34,13 +36,13 @@ export default function SignupPage() {
     })
 
     if (error) {
-      setError(error.message)
+      setError(friendlyAuthError(error.message))
       setLoading(false)
       return
     }
 
     if (data.session) {
-      router.push('/agents')
+      router.push(await getPostAuthDestination(supabase, data.session.user.id))
       router.refresh()
     } else {
       setInfo('Check your email to confirm your account, then sign in.')
@@ -58,8 +60,15 @@ export default function SignupPage() {
             </div>
             <span className="font-['Space_Grotesk'] font-bold text-2xl">AI Workforce</span>
           </Link>
-          <h1 className="font-['Space_Grotesk'] text-3xl font-bold mb-2">Create your account</h1>
-          <p className="text-[#8A88A8]">Register and manage AI worker identities</p>
+          <h1 className="font-['Space_Grotesk'] text-3xl font-bold mb-2">An AI sales team that books meetings</h1>
+          <p className="text-[#8A88A8]">
+            Finds real prospects, writes real outreach, sends from your own Gmail, and tracks replies through to a booked meeting.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mb-8 text-xs text-[#8A88A8]">
+          <span>✓ Your Gmail, not a shared sender</span>
+          <span>✓ You approve every email</span>
         </div>
 
         <div className="bg-[#0C0D22] border border-[#3C3A58]/50 rounded-2xl p-8">

@@ -6,6 +6,8 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { getPostAuthDestination } from '@/lib/onboarding'
+import { friendlyAuthError } from '@/lib/utils'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -27,15 +29,15 @@ export default function LoginPage() {
     setLoading(true)
     setError(null)
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
-      setError(error.message)
+      setError(friendlyAuthError(error.message))
       setLoading(false)
       return
     }
 
-    router.push('/agents')
+    router.push(await getPostAuthDestination(supabase, data.user.id))
     router.refresh()
   }
 
@@ -50,7 +52,7 @@ export default function LoginPage() {
             <span className="font-['Space_Grotesk'] font-bold text-2xl">AI Workforce</span>
           </Link>
           <h1 className="font-['Space_Grotesk'] text-3xl font-bold mb-2">Welcome back</h1>
-          <p className="text-[#8A88A8]">Sign in to manage your agents</p>
+          <p className="text-[#8A88A8]">Sign in to your AI sales team's workspace</p>
         </div>
 
         <div className="bg-[#0C0D22] border border-[#3C3A58]/50 rounded-2xl p-8">

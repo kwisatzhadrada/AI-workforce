@@ -855,6 +855,89 @@ marketplaces, or social features.
   its own (empty) output line before the real assertion's line — fixed by
   comparing only the last output line, not the whole capture.
 
+## Phase 23 — Production Readiness & Launch Sprint
+
+The mission: stop building platform infrastructure and produce evidence
+that this platform is ready for real users, real design partners, and
+(eventually) real paid customers — validation, documentation, and fixing
+real friction, not new features.
+
+- 🚪 **The single biggest first-time-user bug, found and fixed**: every
+  post-auth redirect (root page, login, signup, the email-confirmation
+  callback) sent a brand-new signup to `/agents` — a public directory of
+  other people's AI agents, a leftover from this project's very first
+  framing — instead of the guided onboarding wizard that already existed
+  and already worked. A new `lib/onboarding.ts`'s `getPostAuthDestination()`
+  checks whether the signed-in user owns or belongs to any organization
+  and sends them to `/onboarding` if not, across all four redirect
+  points. Confirmed live with a real headless-browser signup flow
+  (Playwright against `npm run dev`), not assumed.
+- 📝 **Stale product copy, found and fixed**: the page `<title>`/meta
+  description, and the login/signup pages, still described Phase 1's
+  original "AI agent identity/marketplace" concept — directly
+  contradicting this project's own long-standing "no marketplace"
+  constraint. Rewritten to state the real product in one sentence, with
+  two short trust lines added to signup ("Your Gmail, not a shared
+  sender," "You approve every email") answering the landing-page
+  audit's "why trust it" question. See `LANDING_PAGE_AUDIT.md`.
+- 🩹 **A raw "Failed to fetch" error, found and fixed**: confirmed live
+  that a network-level auth failure showed users the literal JavaScript
+  exception text. `lib/utils.ts`'s new `friendlyAuthError()` catches
+  network failures specifically with an actionable message, leaving every
+  other real Supabase error (wrong password, unknown email) untouched.
+- 📄 **`FIRST_TIME_USER_SUCCESS_REPORT.md`** — the full audit behind the
+  three fixes above, explicit about method: real browser testing for
+  signup/login (this sandbox's `.env.local` still had the literal
+  `.env.example` placeholder Supabase URL, confirmed live), rigorous code
+  tracing for everything past authentication.
+- 🧪 **`CAMPAIGN_VALIDATION_REPORT.md`** — the entire data pipeline
+  (deploy workforce → launch campaign with a real ICP → find prospects →
+  draft → approve → send → receive a reply → classify it → auto-create a
+  meeting → record a deal outcome) executed against a genuinely fresh
+  Postgres 16 database as the real RPCs the application actually calls —
+  19/19 steps passed, including a moment RLS correctly rejected a raw
+  write attempt that bypassed the real RPC (proven security, not a bug).
+  Six items requiring real external credentials (Gmail OAuth, Hunter.io,
+  an LLM key) are named precisely as not verifiable in this sandbox,
+  rather than glossed over.
+- ✅ **`DEPLOYMENT_CHECKLIST.md`** — a literal tick-through checklist
+  distinct from the narrative `DEPLOYMENT_GUIDE.md`. Writing it surfaced
+  and fixed two real, concrete documentation bugs: the guide said to run
+  migrations "001 through 013" (would have silently skipped every
+  Phase 14–22 migration for a new deployer) and its environment variable
+  summary never mentioned `SUPABASE_SERVICE_ROLE_KEY`/`CRON_SECRET` at
+  all (without which autonomous background execution silently never
+  runs). Both fixed in `DEPLOYMENT_GUIDE.md` directly.
+- 📊 **Founder dashboard simplified to actionable metrics only** — six
+  phases of "add one more panel to `/analytics`" had accumulated nine
+  stacked panels. A new `FounderKeyMetricsPanel.tsx` puts exactly the
+  eight numbers this sprint's mission named (signups, active
+  organizations, connected integrations, campaigns launched, emails sent,
+  replies received, meetings booked, reply/meeting conversion rates) in
+  one glance at the top of the page; everything else moved below a
+  "Detailed Breakdowns" divider — real detail kept, not deleted, just no
+  longer competing for attention.
+- 🎯 **`DESIGN_PARTNER_READINESS_RANKED.md`** — a fresh Critical/High/
+  Medium/Low ranking for onboarding the first 5 *paying* partners
+  specifically (money changing hands raises the bar past the earlier,
+  unpaid-cohort readiness report). Three genuinely new Critical findings:
+  no payment processor exists anywhere in this codebase, no outbound
+  send rate-limiting exists (risking a real partner's own Gmail account
+  being flagged by Google), and no Terms of Service/Privacy Policy
+  exists. `SUPPORT_PROCESS.md` was also found stale against Phase 22's
+  real triage tooling (documented only 3 of 6 feedback categories, no
+  mention of severity/owner/frequency) and fixed in place.
+- ⚖️ **`LAUNCH_VERDICT.md`** — the direct answer: ready for real users
+  (yes, with this sprint's fixes), ready for design partners (yes, for a
+  small closely-watched cohort, with two real caveats), ready for paid
+  customers (no — there is no way to charge anyone, a deliberate
+  constraint held through this entire project's build-out, and now the
+  one unconditional blocker).
+- 🧪 **Verified against a genuinely fresh local Postgres 16 instance**
+  (22 migrations, no schema changes this sprint) — `scripts/
+  test_critical_paths.sh` re-run clean, 27/27 checks passing, alongside
+  the from-scratch campaign lifecycle simulation above.
+
 ## Getting started
 
 ### 1. Install dependencies

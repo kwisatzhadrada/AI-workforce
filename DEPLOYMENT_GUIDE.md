@@ -13,8 +13,10 @@ minutes, most of it in Google Cloud Console's OAuth consent screen.
 
 1. Create a project at [supabase.com](https://supabase.com).
 2. In the SQL editor, run every file in `supabase/migrations/` **in numeric
-   order**, `001` through `013`. Migrations are additive — running them out
-   of order, or skipping one, will break later ones.
+   order**, `001` through `022` (check the directory for the current
+   highest number — this guide will otherwise go stale every time a new
+   migration ships). Migrations are additive — running them out of order,
+   or skipping one, will break later ones.
 3. Copy your project's URL and anon key (Settings → API) into `.env.local`
    (copy from `.env.example` first).
 4. Set `is_admin = true` on your own row in `public.profiles` if you want
@@ -170,6 +172,9 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 NEXT_PUBLIC_APP_URL=https://your-app.vercel.app
 
+SUPABASE_SERVICE_ROLE_KEY=  # required — powers the hourly cron worker (Settings -> API -> service_role)
+CRON_SECRET=                 # required — any random string; also set as the cron route's Bearer check
+
 OPENAI_API_KEY=            # optional — only needed for AI-drafted goal plans
 ANTHROPIC_API_KEY=         # optional — alternative to OpenAI
 LOCAL_MODEL_URL=           # optional — Ollama-compatible, only if self-hosting a model
@@ -182,3 +187,10 @@ GOOGLE_REDIRECT_URI=https://your-app.vercel.app/api/integrations/gmail/callback
 HubSpot and Hunter.io need no server-side environment variables — both
 connect by pasting a token/key directly from the organization's
 Integrations tab.
+
+**Without `SUPABASE_SERVICE_ROLE_KEY` and `CRON_SECRET` set, autonomous
+background execution silently never runs** — no reply checks, no CRM
+sync, no executive briefs, no campaign progression happen unless a human
+clicks the corresponding button every time. Vercel reads `vercel.json`'s
+`crons` entry automatically on deploy; no separate dashboard step is
+needed beyond setting these two variables.

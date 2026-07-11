@@ -13,6 +13,7 @@ import ProductAnalyticsFunnelPanel from '@/components/analytics/ProductAnalytics
 import PartnerFunnelPanel from '@/components/analytics/PartnerFunnelPanel'
 import PlatformOverviewPanel from '@/components/analytics/PlatformOverviewPanel'
 import OrganizationsTable from '@/components/analytics/OrganizationsTable'
+import FounderKeyMetricsPanel from '@/components/analytics/FounderKeyMetricsPanel'
 import RevenueMetricsPanel from '@/components/admin/RevenueMetricsPanel'
 import FounderCustomerSuccessPanel from '@/components/analytics/FounderCustomerSuccessPanel'
 import FounderProductPanel from '@/components/analytics/FounderProductPanel'
@@ -66,15 +67,21 @@ export default async function AnalyticsPage() {
         </p>
       </div>
 
-      <PlatformOverviewPanel overview={overview} />
+      <FounderKeyMetricsPanel overview={overview} partnerFunnel={partnerFunnel} salesFunnel={salesFunnel} />
       <RevenueMetricsPanel metrics={revenueMetrics} />
       <FounderCustomerSuccessPanel
         healthCounts={healthCounts}
         onboardingCompletionPct={onboardingCompletionPct}
         openSupportConversations={openSupportConversations}
       />
-      <PartnerFunnelPanel funnel={partnerFunnel} />
       <FounderProductPanel feedback={feedback} />
+
+      <div className="pt-2 border-t border-[#3C3A58]/30">
+        <h2 className="font-['Space_Grotesk'] font-bold text-lg mt-4 mb-1">Detailed Breakdowns</h2>
+        <p className="text-xs text-[#8A88A8] mb-4">Where each of the numbers above comes from, and where the drop-off happens.</p>
+      </div>
+      <PlatformOverviewPanel overview={overview} />
+      <PartnerFunnelPanel funnel={partnerFunnel} />
       <ProductAnalyticsFunnelPanel funnel={productFunnel} />
       <OnboardingFunnelPanel funnel={onboardingFunnel} />
       <FunnelPanel funnel={salesFunnel} />

@@ -5,22 +5,29 @@ How a design partner gets help, and how we track and respond to it.
 ## How a design partner reports something
 
 **In-app feedback widget** (bottom-right corner, on every authenticated
-page): three types —
+page): six types —
 
 - 🐛 **Bug** — something broke or behaved unexpectedly.
 - 💡 **Feature request** — something they wish existed.
+- 🚧 **What's stopping me** — a blocker, with a specific reason attached.
+- 🧭 **Onboarding friction** — something confusing or slow while getting set up.
+- 🎉 **Success story** — a real result worth knowing about.
 - 💬 **General feedback** — anything else.
 
 Every submission automatically captures the page URL they were on and
 their account, so we never have to ask "which page were you on?"
 
 Submissions land in `user_feedback` (visible to the submitter and to
-admins only — not a public forum) and are reviewable at `/admin/feedback`.
+admins only — not a public forum) and are reviewable, filterable by
+type/status/severity, at `/admin/feedback`.
 
 ## Triage
 
 Check `/admin/feedback` at least once per business day during an active
-design-partner engagement. For each new item:
+design-partner engagement. Use the real triage controls on that page —
+severity, owner assignment, and a "reported again" counter for genuine
+repeat reports (not automated duplicate detection) — rather than
+tracking any of this outside the tool. For each new item:
 
 1. **Read `TROUBLESHOOTING.md` first** — if it's a documented, known
    error message, reply directly with the fix rather than treating it as
