@@ -660,7 +660,8 @@ path.
   platform a real state machine (`queued → running → {completed | retrying
   → queued | failed}`), claimed with `for update skip locked` for
   concurrent-safe atomic dequeuing. `app/api/cron/process-jobs` — triggered
-  hourly by Vercel Cron (`vercel.json`) — schedules recurring jobs per
+  daily by Vercel Cron (`vercel.json`; originally hourly, changed to fit
+  the Vercel Hobby plan's daily-cron limit) — schedules recurring jobs per
   organization (reply checks, CRM sync, executive briefs, experiment
   evaluation, health checks, daily rollups, and campaign progression for
   organizations at autonomy level 3+) and processes claimed jobs through

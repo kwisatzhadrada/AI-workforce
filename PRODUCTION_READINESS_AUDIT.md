@@ -88,8 +88,10 @@ No OAuth to audit.
 
 ## 6. Cron jobs
 
-`vercel.json` defines one cron: `/api/cron/process-jobs` on `0 * * * *`
-(hourly). The route (`app/api/cron/process-jobs/route.ts`):
+`vercel.json` defines one cron: `/api/cron/process-jobs` on `0 0 * * *`
+(daily — changed from an original hourly schedule after Vercel's Hobby
+plan rejected sub-daily cron expressions at deploy time). The route
+(`app/api/cron/process-jobs/route.ts`):
 - Validates `Authorization: Bearer $CRON_SECRET` before any database
   access — confirmed by reading the route directly, not just the
   Phase 21 README claim.
@@ -98,12 +100,14 @@ No OAuth to audit.
   organizations below autonomy level 3.
 - Processes claimed jobs through `runJobHandler`.
 
-**Finding (Low):** A single hourly cadence is a real constraint — a reply
-received at :01 isn't checked until roughly an hour later. Acceptable for
-a first cohort of design partners (nothing in the mission calls for
-sub-hourly latency), but worth revisiting the schedule once real usage
-data shows whether that latency causes missed follow-ups.
-**Status: Acceptable for current scale, flagged for revisit.**
+**Finding (Low):** A single daily cadence is a real constraint — a reply
+received just after the run isn't checked until roughly a day later.
+Acceptable for a first cohort of design partners (nothing in the mission
+calls for sub-daily latency), and required by the Hobby plan's cron
+limits regardless. A paid Vercel plan (Pro/Enterprise) removes the
+restriction and lets the schedule move back to hourly if real usage data
+shows the latency causes missed follow-ups.
+**Status: Acceptable for current scale, flagged for revisit once on a paid plan.**
 
 **Finding (Low):** Vercel Cron has no built-in alerting if a scheduled
 invocation fails outright (times out, 5xx) rather than completing with
@@ -123,7 +127,9 @@ legitimately have no non-system equivalent. `claim_next_jobs_system` uses
 `for update skip locked`, so concurrent invocations (e.g. a slow-running
 previous invocation overlapping the next hourly trigger) cannot double-
 claim the same job — confirmed structurally by reading the function, and
-behaviorally by `scripts/test_critical_paths.sh`'s job-queue checks.
+behaviorally by `scripts/test_critical_paths.sh`'s job-queue checks. This
+matters less at a daily cadence than it did at hourly, but the guarantee
+holds regardless of schedule.
 
 ## 8. RLS policies
 
@@ -195,7 +201,7 @@ configuration outside this codebase, not a coding task.
 | 1 | No boot-time env var validation | Low | Documented |
 | 2 | OAuth `state` is a routing hint, not a CSRF nonce | Medium | Documented, not exploitable today |
 | 3 | Integration credentials unencrypted at rest | Medium | Documented (carried over) |
-| 4 | Hourly cron cadence | Low | Acceptable, flagged for revisit |
+| 4 | Daily cron cadence (Hobby plan limit) | Low | Acceptable, flagged for revisit on a paid plan |
 | 5 | No alerting on a failed cron invocation itself | Low | Real gap, see #6 |
 | 6 | No alerting/monitoring push (email/Slack/webhook) | **High** | Real gap, top priority next |
 | 7 | No backup strategy documented or implemented | **High** | Real, previously-undocumented gap |

@@ -72,9 +72,11 @@ the actual code, not assumed.
    grows past a handful.
 9. **Integration credentials stored unencrypted at rest** (restated,
    carried since `RELIABILITY_REPORT.md` M2).
-10. **Hourly cron cadence** means up to an hour of latency on reply
-    checks and campaign progression — acceptable for 5 closely-watched
-    partners, worth revisiting once real usage data exists.
+10. **Daily cron cadence** (forced by the Vercel Hobby plan's cron
+    limits) means up to a day of latency on reply checks and campaign
+    progression — acceptable for 5 closely-watched partners short-term,
+    but worth revisiting (a paid Vercel plan removes the restriction)
+    once real usage data exists.
 11. **Signup asks for a password before showing any value** (from
     `LANDING_PAGE_AUDIT.md`) — real friction, but changing the auth
     mechanism is architecture, out of scope this sprint.

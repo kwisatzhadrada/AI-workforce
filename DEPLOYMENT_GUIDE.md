@@ -172,7 +172,7 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 NEXT_PUBLIC_APP_URL=https://your-app.vercel.app
 
-SUPABASE_SERVICE_ROLE_KEY=  # required — powers the hourly cron worker (Settings -> API -> service_role)
+SUPABASE_SERVICE_ROLE_KEY=  # required — powers the daily cron worker (Settings -> API -> service_role)
 CRON_SECRET=                 # required — any random string; also set as the cron route's Bearer check
 
 OPENAI_API_KEY=            # optional — only needed for AI-drafted goal plans
